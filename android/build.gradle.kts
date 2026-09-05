@@ -22,4 +22,9 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
-apply plugin: 'com.google.gms.google-services'
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services") // ఫైర్‌బేస్ ప్లాగిన్ ఇక్కడ ఉండాలి
+}
