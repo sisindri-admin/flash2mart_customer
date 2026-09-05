@@ -6,6 +6,9 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,8 +35,20 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload APK Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: flash2mart-customer-app
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          tag_name: v1.0.0-${{ github.run_number }}
+          name: Release v1.0.0-${{ github.run_number }}
+          body: |
+            Automatic Release for Flash2Mart Customer App.
+            Contains stable app-release.apk.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
