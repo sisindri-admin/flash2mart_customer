@@ -32,9 +32,12 @@ dependencies:
     sdk: flutter
 
   # Firebase Packages
+  http: ^1.2.0
   firebase_core: ^3.0.0
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
+  geolocator: ^13.0.1
+  geocoding: ^3.0.0
 
   # UI Helper Packages
   google_fonts: ^6.1.0
