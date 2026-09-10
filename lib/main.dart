@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+
 import 'firebase_options.dart';
+import 'providers/cart_provider.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
@@ -8,7 +11,15 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const Flash2MartCustomerApp());
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: const Flash2MartCustomerApp(),
+    ),
+  );
 }
 
 class Flash2MartCustomerApp extends StatelessWidget {

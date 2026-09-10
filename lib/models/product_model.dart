@@ -5,7 +5,11 @@ class CategoryModel {
   final String name;
   final String icon;
 
-  CategoryModel({required this.id, required this.name, required this.icon});
+  CategoryModel({
+    required this.id,
+    required this.name,
+    required this.icon,
+  });
 
   factory CategoryModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -43,9 +47,9 @@ class ProductModel {
     return ProductModel(
       id: doc.id,
       name: data['name'] ?? '',
-      weight: data['weight'] ?? '',
+      weight: data['weight'] ?? data['unit'] ?? '',
       price: (data['price'] ?? 0).toDouble(),
-      originalPrice: (data['originalPrice'] ?? 0).toDouble(),
+      originalPrice: (data['originalPrice'] ?? data['price'] ?? 0).toDouble(),
       imageUrl: data['imageUrl'] ?? '',
       categoryId: data['categoryId'] ?? '',
       isAvailable: data['isAvailable'] ?? true,
