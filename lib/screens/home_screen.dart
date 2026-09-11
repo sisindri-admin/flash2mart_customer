@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/product_card.dart';
+import 'checkout_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,8 +18,14 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _addressEditController = TextEditingController();
+
   String _searchQuery = '';
   String _selectedCategory = 'All';
+
+  // Complete Address Details
+  String _currentAddress = "Fetch Live Location...";
+  bool _isLoadingLocation = false;
 
   final List<String> _categories = [
     'All',
@@ -27,6 +36,247 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _fetchLiveLocation();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _addressEditController.dispose();
+    super.dispose();
+  }
+
+  // 1. Full Live GPS Location Fetching Logic
+  Future<void> _fetchLiveLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _currentAddress = "GPS Off - Select Manually";
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _currentAddress = "Permission Denied";
+            _isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _currentAddress = "Enable Location in Settings";
+          _isLoadingLocation = false;
+        });
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+
+        List<String> addressParts = [];
+
+        if (place.street != null && place.street!.isNotEmpty) {
+          addressParts.add(place.street!);
+        }
+        if (place.subLocality != null &&
+            place.subLocality!.isNotEmpty &&
+            place.subLocality != place.street) {
+          addressParts.add(place.subLocality!);
+        }
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          addressParts.add(place.locality!);
+        }
+        if (place.postalCode != null && place.postalCode!.isNotEmpty) {
+          addressParts.add(place.postalCode!);
+        }
+
+        final fullAddress = addressParts.join(', ');
+
+        setState(() {
+          _currentAddress = fullAddress.isNotEmpty ? fullAddress : "Location Detected";
+          _addressEditController.text = _currentAddress;
+          _isLoadingLocation = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _currentAddress = "Vedayapalem, Main Road, Nellore - 524004";
+        _addressEditController.text = _currentAddress;
+        _isLoadingLocation = false;
+      });
+    }
+  }
+
+  // 2. Editable Location Bottom Sheet Dialog
+  void _showLocationBottomSheet() {
+    _addressEditController.text = _currentAddress;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Delivery Location',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              InkWell(
+                onTap: () {
+                  Navigator.pop(context);
+                  _fetchLiveLocation();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00875A).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.my_location, color: Color(0xFF00875A)),
+                      SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Fetch Current GPS Location',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF00875A),
+                            ),
+                          ),
+                          Text(
+                            'Using satellite precise location',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              const Text(
+                'Edit / Customize Address:',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+
+              TextField(
+                controller: _addressEditController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  hintText: 'Enter Door No, Street Name, Area...',
+                  prefixIcon: const Icon(Icons.edit_location_alt_outlined, color: Color(0xFF00875A)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF00875A), width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  ActionChip(
+                    avatar: const Icon(Icons.home, size: 16, color: Colors.blue),
+                    label: const Text('Home'),
+                    onPressed: () {
+                      _addressEditController.text = "D.No: 12-3-45, Home Street, Vedayapalem, Nellore";
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ActionChip(
+                    avatar: const Icon(Icons.work, size: 16, color: Colors.orange),
+                    label: const Text('Work'),
+                    onPressed: () {
+                      _addressEditController.text = "Plot 402, Tech Hub, Magunta Layout, Nellore";
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00875A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    if (_addressEditController.text.trim().isNotEmpty) {
+                      setState(() {
+                        _currentAddress = _addressEditController.text.trim();
+                      });
+                    }
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'UPDATE LOCATION',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context);
 
@@ -35,13 +285,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. TOP HEADER WITH FLASH2MART BRANDING
             _buildAttractiveHeader(),
-
-            // 2. CATEGORIES FILTER
             _buildCategoriesList(),
-
-            // 3. LIVE PRODUCTS GRID
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -51,14 +296,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      // 4. BOTTOM ORDER BAR
       bottomNavigationBar: cartProvider.totalQuantity > 0
           ? BottomOrderBar(
               totalQuantity: cartProvider.totalQuantity,
               totalAmount: cartProvider.totalAmount,
-              selectedAddress: "Nellore (Current Location)",
+              selectedAddress: _currentAddress,
               onViewCartPressed: () {
-                // TODO: Cart Screen కి నెవిగేట్ చేయండి
+                // Checkout Screen కి నెవిగేషన్
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CheckoutScreen(
+                      selectedAddress: _currentAddress,
+                    ),
+                  ),
+                );
               },
             )
           : null,
@@ -77,61 +329,74 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          // Top Row: Brand & Location
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Flash2Mart',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Flash2Mart',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade400,
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade400,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.bolt, size: 12, color: Colors.black),
+                              Text(
+                                '15 MINS',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.bolt, size: 12, color: Colors.black),
-                            Text(
-                              '15 MINS',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    GestureDetector(
+                      onTap: _showLocationBottomSheet,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.white70, size: 14),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              _isLoadingLocation ? "Detecting location..." : _currentAddress,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 16),
+                        ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  const Row(
-                    children: [
-                      Icon(Icons.location_on, color: Colors.white70, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        'Vedayapalem, Nellore Urban',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                      ),
-                      Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 16),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               CircleAvatar(
                 backgroundColor: Colors.white.withOpacity(0.2),
                 child: const Icon(Icons.person_outline, color: Colors.white),
@@ -140,7 +405,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Search Bar
           Container(
             height: 46,
             decoration: BoxDecoration(
