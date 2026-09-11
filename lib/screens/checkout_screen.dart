@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
+import 'my_orders_screen.dart'; // 👈 MyOrdersScreen Import
 
 class CheckoutScreen extends StatefulWidget {
   final String selectedAddress;
@@ -22,10 +24,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isPlacingOrder = false;
 
   final TextEditingController _instructionController = TextEditingController();
+  final ScrollController _scrollController = ScrollController(keepScrollOffset: true);
 
   @override
   void dispose() {
     _instructionController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -34,6 +38,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final random = Random();
     int number = 100000 + random.nextInt(900000);
     return number.toString();
+  }
+
+  // Helper Widget for Rendering Base64 & Network Images
+  Widget _buildProductImage(String? imageStr) {
+    if (imageStr == null || imageStr.trim().isEmpty) {
+      return Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade400);
+    }
+
+    // Base64 Image Handling
+    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
+      try {
+        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
+        final bytes = base64Decode(cleanBase64.trim());
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade400),
+        );
+      } catch (e) {
+        return Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade400);
+      }
+    }
+
+    // Network Image Handling
+    return Image.network(
+      imageStr,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade400),
+    );
   }
 
   // Order Placement
@@ -118,10 +151,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop();
+                Navigator.of(ctx).pop(); // Close Dialog
+                Navigator.of(context).pop(); // Close Checkout Screen
+
+                // Direct Navigation to My Orders Screen 👈
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MyOrdersScreen()),
+                );
               },
-              child: const Text('BACK TO HOME', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('VIEW MY ORDERS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           )
         ],
@@ -131,9 +170,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // listen: false ఇచ్చాం కాబట్టి Cart మార్పుల వలన మొత్తం ఈ Widget re-build అవ్వదు
-    final cartProvider = Provider.of<CartProvider>(context, listen: false);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -146,13 +182,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ),
       ),
       body: Consumer<CartProvider>(
-        builder: (context, cart, child) {
-          if (cart.items.isEmpty) {
+        builder: (context, cartProvider, child) {
+          if (cartProvider.items.isEmpty) {
             return const Center(child: Text('మీ కార్ట్ ఖాళీగా ఉంది.'));
           }
 
-          final cartItems = cart.items.values.toList();
-          final double itemTotal = cart.totalAmount;
+          final cartItems = cartProvider.items.values.toList();
+          final double itemTotal = cartProvider.totalAmount;
           final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
           final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
           final double grandTotal = itemTotal + deliveryFee + handlingFee;
@@ -160,8 +196,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return Scaffold(
             backgroundColor: Colors.transparent,
             body: SingleChildScrollView(
+              controller: _scrollController,
+              primary: false,
               padding: const EdgeInsets.all(16),
               child: Column(
+                key: const ValueKey('checkout_column'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 1. DELIVERY ADDRESS SUMMARY
@@ -189,11 +228,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                   const SizedBox(height: 14),
 
-                  // 2. ORDER SUMMARY LIST
+                  // 2. ORDER SUMMARY LIST WITH WORKING IMAGES
                   _buildSectionCard(
                     title: 'Order Summary (${cartItems.length} Items)',
                     icon: Icons.shopping_bag_outlined,
                     child: ListView.separated(
+                      key: const PageStorageKey('cart_items_list'),
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: cartItems.length,
@@ -201,21 +241,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       itemBuilder: (context, index) {
                         final item = cartItems[index];
                         return Row(
-                          key: ValueKey('checkout_item_${item.id}'),
+                          key: ValueKey(item.id),
                           children: [
+                            // Product Image Container (Base64 + Network Image handling)
                             Container(
-                              width: 45,
-                              height: 45,
+                              width: 48,
+                              height: 48,
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
+                                color: Colors.grey.shade50,
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade200),
                               ),
-                              child: item.imageUrl.isNotEmpty
-                                  ? ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(item.imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image, size: 20, color: Colors.grey)),
-                                    )
-                                  : const Icon(Icons.fastfood, color: Color(0xFF00875A)),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: _buildProductImage(item.imageUrl),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -227,7 +267,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ],
                               ),
                             ),
-                            // Key pad focus నివారించడానికి focusNode handle చేశాం
                             Container(
                               height: 32,
                               decoration: BoxDecoration(
@@ -235,26 +274,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton(
-                                    focusNode: FocusNode(skipTraversal: true),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 28),
-                                    icon: const Icon(Icons.remove, size: 16, color: Color(0xFF00875A)),
-                                    onPressed: () => cart.removeSingleItem(item.id),
+                                  InkWell(
+                                    onTap: () => cartProvider.removeSingleItem(item.id),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      child: Icon(Icons.remove, size: 16, color: Color(0xFF00875A)),
+                                    ),
                                   ),
                                   Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00875A))),
-                                  IconButton(
-                                    focusNode: FocusNode(skipTraversal: true),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(minWidth: 28),
-                                    icon: const Icon(Icons.add, size: 16, color: Color(0xFF00875A)),
-                                    onPressed: () => cart.addItem(
+                                  InkWell(
+                                    onTap: () => cartProvider.addItem(
                                       id: item.id,
                                       name: item.name,
                                       price: item.price,
                                       unit: item.unit,
                                       imageUrl: item.imageUrl,
+                                    ),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      child: Icon(Icons.add, size: 16, color: Color(0xFF00875A)),
                                     ),
                                   ),
                                 ],
@@ -293,28 +333,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   _buildSectionCard(
                     title: 'Payment Method',
                     icon: Icons.payment,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: Column(
-                        children: [
-                          RadioListTile<String>(
-                            value: 'COD',
-                            groupValue: _selectedPaymentMethod,
-                            activeColor: const Color(0xFF00875A),
-                            title: const Text('Cash on Delivery / Pay on Delivery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                            secondary: const Icon(Icons.money, color: Colors.green),
-                            onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-                          ),
-                          RadioListTile<String>(
-                            value: 'UPI',
-                            groupValue: _selectedPaymentMethod,
-                            activeColor: const Color(0xFF00875A),
-                            title: const Text('UPI / GooglePay / PhonePe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                            secondary: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
-                            onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-                          ),
-                        ],
-                      ),
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          value: 'COD',
+                          groupValue: _selectedPaymentMethod,
+                          activeColor: const Color(0xFF00875A),
+                          title: const Text('Cash on Delivery / Pay on Delivery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          secondary: const Icon(Icons.money, color: Colors.green),
+                          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+                        ),
+                        RadioListTile<String>(
+                          value: 'UPI',
+                          groupValue: _selectedPaymentMethod,
+                          activeColor: const Color(0xFF00875A),
+                          title: const Text('UPI / GooglePay / PhonePe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          secondary: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
+                          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+                        ),
+                      ],
                     ),
                   ),
 
@@ -395,25 +432,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 18, color: const Color(0xFF00875A)),
-                  const SizedBox(width: 8),
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              child,
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: const Color(0xFF00875A)),
+                const SizedBox(width: 8),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Material(
+              color: Colors.transparent,
+              child: child,
+            ),
+          ],
         ),
       ),
     );

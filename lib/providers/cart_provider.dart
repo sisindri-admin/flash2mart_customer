@@ -20,7 +20,16 @@ class CartProvider extends ChangeNotifier {
     required String imageUrl,
   }) {
     if (_items.containsKey(id)) {
-      _items[id]!.quantity += 1;
+      // ఇప్పటికే ఉన్న Item లో Image URL ఖాళీగా కాకుండా ఉంటే అప్‌డేట్ చేస్తుంది
+      final existingItem = _items[id]!;
+      _items[id] = CartItem(
+        id: existingItem.id,
+        name: existingItem.name,
+        price: existingItem.price,
+        unit: existingItem.unit,
+        imageUrl: (imageUrl.isNotEmpty) ? imageUrl : existingItem.imageUrl,
+        quantity: existingItem.quantity + 1,
+      );
     } else {
       _items[id] = CartItem(
         id: id,
@@ -28,6 +37,7 @@ class CartProvider extends ChangeNotifier {
         price: price,
         unit: unit,
         imageUrl: imageUrl,
+        quantity: 1,
       );
     }
     notifyListeners();
@@ -36,10 +46,23 @@ class CartProvider extends ChangeNotifier {
   void removeSingleItem(String id) {
     if (!_items.containsKey(id)) return;
     if (_items[id]!.quantity > 1) {
-      _items[id]!.quantity -= 1;
+      final existingItem = _items[id]!;
+      _items[id] = CartItem(
+        id: existingItem.id,
+        name: existingItem.name,
+        price: existingItem.price,
+        unit: existingItem.unit,
+        imageUrl: existingItem.imageUrl,
+        quantity: existingItem.quantity - 1,
+      );
     } else {
       _items.remove(id);
     }
+    notifyListeners();
+  }
+
+  void removeItemCompletely(String id) {
+    _items.remove(id);
     notifyListeners();
   }
 

@@ -8,6 +8,7 @@ import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
+import 'my_orders_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,13 +18,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0; // 0: Home, 1: My Orders, 2: Help
+
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
 
   String _searchQuery = '';
   String _selectedCategory = 'All';
 
-  // Complete Address Details
   String _currentAddress = "Fetch Live Location...";
   bool _isLoadingLocation = false;
 
@@ -48,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // 1. Full Live GPS Location Fetching Logic
   Future<void> _fetchLiveLocation() async {
     setState(() => _isLoadingLocation = true);
     try {
@@ -92,7 +93,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-
         List<String> addressParts = [];
 
         if (place.street != null && place.street!.isNotEmpty) {
@@ -127,7 +127,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 2. Editable Location Bottom Sheet Dialog
   void _showLocationBottomSheet() {
     _addressEditController.text = _currentAddress;
 
@@ -163,7 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-
               InkWell(
                 onTap: () {
                   Navigator.pop(context);
@@ -200,13 +198,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
               const Text(
                 'Edit / Customize Address:',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 8),
-
               TextField(
                 controller: _addressEditController,
                 maxLines: 2,
@@ -223,7 +219,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
               Row(
                 children: [
                   ActionChip(
@@ -244,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -276,44 +270,109 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildHomeBody() {
+    return SafeArea(
+      child: Column(
+        children: [
+          _buildAttractiveHeader(),
+          _buildCategoriesList(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _buildProductsGrid(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHelpBody() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Help & Support"),
+        backgroundColor: const Color(0xFF00875A),
+        foregroundColor: Colors.white,
+      ),
+      body: const Center(
+        child: Text("Support Details & Contact Options"),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cartProvider = Provider.of<CartProvider>(context);
+    final List<Widget> pages = [
+      _buildHomeBody(),
+      const MyOrdersScreen(),
+      _buildHelpBody(),
+    ];
+
+    // 👈 Index out of bounds రాకుండా సేఫ్‌గా కంట్రోల్ చేయడం
+    final int safeIndex = (_currentIndex < pages.length && _currentIndex >= 0) ? _currentIndex : 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildAttractiveHeader(),
-            _buildCategoriesList(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: _buildProductsGrid(),
-              ),
-            ),
-          ],
-        ),
+      body: IndexedStack(
+        index: safeIndex,
+        children: pages,
       ),
-      bottomNavigationBar: cartProvider.totalQuantity > 0
-          ? BottomOrderBar(
-              totalQuantity: cartProvider.totalQuantity,
-              totalAmount: cartProvider.totalAmount,
-              selectedAddress: _currentAddress,
-              onViewCartPressed: () {
-                // Checkout Screen కి నెవిగేషన్
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CheckoutScreen(
-                      selectedAddress: _currentAddress,
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Selector<CartProvider, int>(
+            selector: (context, cart) => cart.totalQuantity,
+            builder: (context, totalQuantity, child) {
+              if (totalQuantity <= 0) return const SizedBox.shrink();
+
+              final cartProvider = Provider.of<CartProvider>(context, listen: false);
+              return BottomOrderBar(
+                totalQuantity: totalQuantity,
+                totalAmount: cartProvider.totalAmount,
+                selectedAddress: _currentAddress,
+                onViewCartPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CheckoutScreen(
+                        selectedAddress: _currentAddress,
+                      ),
                     ),
-                  ),
-                );
-              },
-            )
-          : null,
+                  );
+                },
+              );
+            },
+          ),
+          BottomNavigationBar(
+            currentIndex: safeIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            selectedItemColor: const Color(0xFF00875A),
+            unselectedItemColor: Colors.grey.shade600,
+            type: BottomNavigationBarType.fixed,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.shopping_bag_outlined),
+                activeIcon: Icon(Icons.shopping_bag),
+                label: 'My Orders',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.help_outline),
+                activeIcon: Icon(Icons.help),
+                label: 'Help',
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -371,7 +430,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-
                     GestureDetector(
                       onTap: _showLocationBottomSheet,
                       child: Row(
@@ -404,7 +462,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 14),
-
           Container(
             height: 46,
             decoration: BoxDecoration(
@@ -440,6 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
       height: 44,
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: ListView.builder(
+        key: const PageStorageKey('categories_list'),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         itemCount: _categories.length,
@@ -473,8 +531,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildProductsGrid() {
-    final cartProvider = Provider.of<CartProvider>(context);
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('products').snapshots(),
       builder: (context, snapshot) {
@@ -510,6 +566,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         return GridView.builder(
+          key: const PageStorageKey('home_products_grid'),
           physics: const BouncingScrollPhysics(),
           itemCount: docs.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -528,26 +585,31 @@ class _HomeScreenState extends State<HomeScreen> {
             final productUnit = data['unit'] ?? data['weight'] ?? '1 unit';
             final imageUrl = data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '';
 
-            final currentQty = cartProvider.items[productId]?.quantity ?? 0;
-
-            return ProductCard(
-              id: productId,
-              name: productName,
-              price: productPrice,
-              unit: productUnit,
-              imageUrl: imageUrl,
-              quantityInCart: currentQty,
-              onAdd: () {
-                cartProvider.addItem(
+            return Selector<CartProvider, int>(
+              selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
+              builder: (context, currentQty, child) {
+                final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                return ProductCard(
+                  key: ValueKey('product_$productId'),
                   id: productId,
                   name: productName,
                   price: productPrice,
                   unit: productUnit,
                   imageUrl: imageUrl,
+                  quantityInCart: currentQty,
+                  onAdd: () {
+                    cartProvider.addItem(
+                      id: productId,
+                      name: productName,
+                      price: productPrice,
+                      unit: productUnit,
+                      imageUrl: imageUrl,
+                    );
+                  },
+                  onRemove: () {
+                    cartProvider.removeSingleItem(productId);
+                  },
                 );
-              },
-              onRemove: () {
-                cartProvider.removeSingleItem(productId);
               },
             );
           },

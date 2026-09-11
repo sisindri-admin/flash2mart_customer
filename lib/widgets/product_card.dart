@@ -23,11 +23,13 @@ class ProductCard extends StatelessWidget {
     required this.onRemove,
   });
 
+  // Base64 & Network Image handling logic
   Widget _buildProductImage(String imageStr) {
-    if (imageStr.isEmpty) {
+    if (imageStr.trim().isEmpty) {
       return Icon(Icons.shopping_bag_outlined, size: 52, color: Colors.green.shade200);
     }
 
+    // 1. Base64 Handling
     if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
       try {
         final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
@@ -42,6 +44,7 @@ class ProductCard extends StatelessWidget {
       }
     }
 
+    // 2. Network Image Handling
     return Image.network(
       imageStr,
       fit: BoxFit.contain,
@@ -68,7 +71,7 @@ class ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image Area with Soft Background
+          // Image Area
           Expanded(
             child: Container(
               width: double.infinity,
@@ -79,7 +82,10 @@ class ProductCard extends StatelessWidget {
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: _buildProductImage(imageUrl),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _buildProductImage(imageUrl),
+                  ),
                 ),
               ),
             ),
@@ -151,11 +157,13 @@ class ProductCard extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 26),
-                            icon: const Icon(Icons.remove, size: 16, color: Colors.white),
-                            onPressed: onRemove,
+                          // Focus/Jump రాకుండా InkWell బటన్లు
+                          InkWell(
+                            onTap: onRemove,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              child: Icon(Icons.remove, size: 16, color: Colors.white),
+                            ),
                           ),
                           Text(
                             '$quantityInCart',
@@ -165,11 +173,12 @@ class ProductCard extends StatelessWidget {
                               fontSize: 13,
                             ),
                           ),
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 26),
-                            icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                            onPressed: onAdd,
+                          InkWell(
+                            onTap: onAdd,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              child: Icon(Icons.add, size: 16, color: Colors.white),
+                            ),
                           ),
                         ],
                       ),
