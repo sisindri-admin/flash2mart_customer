@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
@@ -6,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
+import '../widgets/custom_bottom_navbar.dart'; // 👈 కొత్త Custom Bottom NavBar Import
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
 import 'my_orders_screen.dart';
@@ -18,7 +20,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0; // 0: Home, 1: My Orders, 2: Help
+  int _currentIndex = 0; // 0: Home, 1: My Orders, 2: Cart, 3: Help
+
+  // Auto-hide bottom bar variables
+  bool _showCartPopup = false;
+  Timer? _cartTimer;
 
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
@@ -45,9 +51,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _cartTimer?.cancel();
     _searchController.dispose();
     _addressEditController.dispose();
     super.dispose();
+  }
+
+  void _triggerCartPopup() {
+    _cartTimer?.cancel();
+    setState(() {
+      _showCartPopup = true;
+    });
+
+    _cartTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showCartPopup = false;
+        });
+      }
+    });
   }
 
   Future<void> _fetchLiveLocation() async {
@@ -305,10 +327,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> pages = [
       _buildHomeBody(),
       const MyOrdersScreen(),
+      CheckoutScreen(selectedAddress: _currentAddress),
       _buildHelpBody(),
     ];
 
-    // 👈 Index out of bounds రాకుండా సేఫ్‌గా కంట్రోల్ చేయడం
     final int safeIndex = (_currentIndex < pages.length && _currentIndex >= 0) ? _currentIndex : 0;
 
     return Scaffold(
@@ -323,53 +345,35 @@ class _HomeScreenState extends State<HomeScreen> {
           Selector<CartProvider, int>(
             selector: (context, cart) => cart.totalQuantity,
             builder: (context, totalQuantity, child) {
-              if (totalQuantity <= 0) return const SizedBox.shrink();
+              if (totalQuantity <= 0 || !_showCartPopup) return const SizedBox.shrink();
 
               final cartProvider = Provider.of<CartProvider>(context, listen: false);
-              return BottomOrderBar(
-                totalQuantity: totalQuantity,
-                totalAmount: cartProvider.totalAmount,
-                selectedAddress: _currentAddress,
-                onViewCartPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CheckoutScreen(
-                        selectedAddress: _currentAddress,
-                      ),
-                    ),
-                  );
-                },
+              return AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: _showCartPopup ? 1.0 : 0.0,
+                child: BottomOrderBar(
+                  totalQuantity: totalQuantity,
+                  totalAmount: cartProvider.totalAmount,
+                  selectedAddress: _currentAddress,
+                  onViewCartPressed: () {
+                    setState(() {
+                      _currentIndex = 2;
+                      _showCartPopup = false;
+                    });
+                  },
+                ),
               );
             },
           ),
-          BottomNavigationBar(
+          
+          // 👈 వేరుచేసిన Custom Bottom NavBar ను ఇక్కడ కనెక్ట్ చేసాము
+          CustomBottomNavBar(
             currentIndex: safeIndex,
             onTap: (index) {
               setState(() {
                 _currentIndex = index;
               });
             },
-            selectedItemColor: const Color(0xFF00875A),
-            unselectedItemColor: Colors.grey.shade600,
-            type: BottomNavigationBarType.fixed,
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home),
-                label: 'Home',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.shopping_bag_outlined),
-                activeIcon: Icon(Icons.shopping_bag),
-                label: 'My Orders',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.help_outline),
-                activeIcon: Icon(Icons.help),
-                label: 'Help',
-              ),
-            ],
           ),
         ],
       ),
@@ -605,9 +609,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       unit: productUnit,
                       imageUrl: imageUrl,
                     );
+                    _triggerCartPopup();
                   },
                   onRemove: () {
                     cartProvider.removeSingleItem(productId);
+                    _triggerCartPopup();
                   },
                 );
               },
