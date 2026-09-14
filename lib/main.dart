@@ -13,6 +13,7 @@ import 'screens/home_screen.dart';
 import 'screens/my_orders_screen.dart'; 
 import 'screens/checkout_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/help_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,9 +49,11 @@ class Flash2MartCustomerApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
+        '/main': (context) => const HomeScreen(), // <--- క్రష్ ఎర్రర్ రాకుండా ఇక్కడ '/main' రూట్ ని యాడ్ చేయడం జరిగింది
         '/orders': (context) => const MyOrdersScreen(),
         '/checkout': (context) => const CheckoutScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/help': (context) => const HelpScreen(),
       },
     );
   }

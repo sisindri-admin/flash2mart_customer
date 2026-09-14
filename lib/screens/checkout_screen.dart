@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
-import 'my_orders_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final String? selectedAddress;
@@ -32,6 +31,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _instructionController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Safe Navigation Handler using /home (Matches main.dart route table)
+  void _handleBackNavigation() {
+    if (_isPlacingOrder) return;
+
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/home',
+        (route) => false,
+      );
+    }
   }
 
   // 6-digit Numeric Order ID Generator
@@ -201,7 +215,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               onPressed: () {
                 Navigator.of(ctx).pop();
                 Navigator.of(context).pushNamedAndRemoveUntil(
-                  '/main',
+                  '/orders',
                   (route) => false,
                 );
               },
@@ -222,275 +236,278 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ? widget.selectedAddress!
         : 'దయచేసి అడ్రస్‌ని ఎంచుకోండి';
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: const Text(
-          'Checkout & Bill',
-          style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBackNavigation();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8FAFC),
+        appBar: AppBar(
+          title: const Text(
+            'Checkout & Bill',
+            style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            tooltip: 'Back',
+            onPressed: _handleBackNavigation,
+          ),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          tooltip: 'Back',
-          onPressed: () {
-            if (!_isPlacingOrder) {
-              Navigator.pop(context);
+        body: Consumer<CartProvider>(
+          builder: (context, cartProvider, child) {
+            if (cartProvider.items.isEmpty) {
+              return const Center(child: Text('మీ కార్ట్ ఖాళీగా ఉంది.'));
             }
+
+            final cartItems = cartProvider.items.values.toList();
+            final double itemTotal = cartProvider.totalAmount;
+            final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
+            final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
+            final double grandTotal = itemTotal + deliveryFee + handlingFee;
+
+            return SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                key: const ValueKey('checkout_column'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. DELIVERY ADDRESS SUMMARY
+                  _buildSectionCard(
+                    title: 'Delivery Address',
+                    icon: Icons.location_on,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayAddress,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 6),
+                        const Row(
+                          children: [
+                            Icon(Icons.bolt, size: 14, color: Colors.amber),
+                            SizedBox(width: 4),
+                            Text(
+                              'Delivery in 15 mins',
+                              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 2. ORDER SUMMARY LIST
+                  _buildSectionCard(
+                    title: 'Order Summary (${cartItems.length} Items)',
+                    icon: Icons.shopping_bag_outlined,
+                    child: ListView.separated(
+                      key: const PageStorageKey('cart_items_list'),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: cartItems.length,
+                      separatorBuilder: (_, __) => const Divider(height: 16),
+                      itemBuilder: (context, index) {
+                        final item = cartItems[index];
+                        return Row(
+                          key: ValueKey(item.id),
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: _buildProductImage(item.imageUrl),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                  Text(item.unit, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00875A).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: () => cartProvider.removeSingleItem(item.id),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      child: Icon(Icons.remove, size: 16, color: Color(0xFF00875A)),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${item.quantity}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00875A)),
+                                  ),
+                                  InkWell(
+                                    onTap: () => cartProvider.addItem(
+                                      id: item.id,
+                                      name: item.name,
+                                      price: item.price,
+                                      unit: item.unit,
+                                      imageUrl: item.imageUrl,
+                                    ),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      child: Icon(Icons.add, size: 16, color: Color(0xFF00875A)),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '₹${(item.price * item.quantity).toStringAsFixed(0)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 3. DELIVERY INSTRUCTIONS
+                  _buildSectionCard(
+                    title: 'Delivery Instructions (Optional)',
+                    icon: Icons.note_alt_outlined,
+                    child: TextField(
+                      controller: _instructionController,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Leave at door, Don\'t ring bell...',
+                        hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 4. PAYMENT METHOD SELECTOR
+                  _buildSectionCard(
+                    title: 'Payment Method',
+                    icon: Icons.payment,
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          value: 'COD',
+                          groupValue: _selectedPaymentMethod,
+                          activeColor: const Color(0xFF00875A),
+                          title: const Text('Cash on Delivery / Pay on Delivery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          secondary: const Icon(Icons.money, color: Colors.green),
+                          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+                        ),
+                        RadioListTile<String>(
+                          value: 'UPI',
+                          groupValue: _selectedPaymentMethod,
+                          activeColor: const Color(0xFF00875A),
+                          title: const Text('UPI / GooglePay / PhonePe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          secondary: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
+                          onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // 5. BILL DETAILS
+                  _buildSectionCard(
+                    title: 'Bill Details',
+                    icon: Icons.receipt_long_outlined,
+                    child: Column(
+                      children: [
+                        _buildBillRow('Item Total', '₹${itemTotal.toStringAsFixed(2)}'),
+                        const SizedBox(height: 8),
+                        _buildBillRow('Delivery Charge', deliveryFee == 0 ? 'FREE' : '₹${deliveryFee.toStringAsFixed(2)}', isFree: deliveryFee == 0),
+                        const SizedBox(height: 8),
+                        _buildBillRow('Handling & Packaging Charge', '₹${handlingFee.toStringAsFixed(2)}'),
+                        const Divider(height: 20),
+                        _buildBillRow('To Pay', '₹${grandTotal.toStringAsFixed(2)}', isBold: true),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 80),
+                ],
+              ),
+            );
           },
         ),
-      ),
-      body: Consumer<CartProvider>(
-        builder: (context, cartProvider, child) {
-          if (cartProvider.items.isEmpty) {
-            return const Center(child: Text('మీ కార్ట్ ఖాళీగా ఉంది.'));
-          }
+        bottomNavigationBar: Consumer<CartProvider>(
+          builder: (context, cartProvider, child) {
+            final double itemTotal = cartProvider.totalAmount;
+            final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
+            final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
+            final double grandTotal = itemTotal + deliveryFee + handlingFee;
 
-          final cartItems = cartProvider.items.values.toList();
-          final double itemTotal = cartProvider.totalAmount;
-          final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
-          final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
-          final double grandTotal = itemTotal + deliveryFee + handlingFee;
-
-          return SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              key: const ValueKey('checkout_column'),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. DELIVERY ADDRESS SUMMARY
-                _buildSectionCard(
-                  title: 'Delivery Address',
-                  icon: Icons.location_on,
-                  child: Column(
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, -4)),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min, // <--- dynamic ని తీసి MainAxisSize.min కి మార్చబడింది
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text('TOTAL PAYABLE', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
                       Text(
-                        displayAddress,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
-                      ),
-                      const SizedBox(height: 6),
-                      const Row(
-                        children: [
-                          Icon(Icons.bolt, size: 14, color: Colors.amber),
-                          SizedBox(width: 4),
-                          Text(
-                            'Delivery in 15 mins',
-                            style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
-                          ),
-                        ],
+                        '₹${grandTotal.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00875A)),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // 2. ORDER SUMMARY LIST
-                _buildSectionCard(
-                  title: 'Order Summary (${cartItems.length} Items)',
-                  icon: Icons.shopping_bag_outlined,
-                  child: ListView.separated(
-                    key: const PageStorageKey('cart_items_list'),
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: cartItems.length,
-                    separatorBuilder: (_, __) => const Divider(height: 16),
-                    itemBuilder: (context, index) {
-                      final item = cartItems[index];
-                      return Row(
-                        key: ValueKey(item.id),
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: _buildProductImage(item.imageUrl),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                Text(item.unit, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00875A).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                InkWell(
-                                  onTap: () => cartProvider.removeSingleItem(item.id),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    child: Icon(Icons.remove, size: 16, color: Color(0xFF00875A)),
-                                  ),
-                                ),
-                                Text(
-                                  '${item.quantity}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00875A)),
-                                ),
-                                InkWell(
-                                  onTap: () => cartProvider.addItem(
-                                    id: item.id,
-                                    name: item.name,
-                                    price: item.price,
-                                    unit: item.unit,
-                                    imageUrl: item.imageUrl,
-                                  ),
-                                  child: const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    child: Icon(Icons.add, size: 16, color: Color(0xFF00875A)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '₹${(item.price * item.quantity).toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // 3. DELIVERY INSTRUCTIONS
-                _buildSectionCard(
-                  title: 'Delivery Instructions (Optional)',
-                  icon: Icons.note_alt_outlined,
-                  child: TextField(
-                    controller: _instructionController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g. Leave at door, Don\'t ring bell...',
-                      hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
-                      border: InputBorder.none,
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00875A),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _isPlacingOrder ? null : () => _placeOrder(cartProvider),
+                        child: _isPlacingOrder
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('PLACE ORDER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // 4. PAYMENT METHOD SELECTOR
-                _buildSectionCard(
-                  title: 'Payment Method',
-                  icon: Icons.payment,
-                  child: Column(
-                    children: [
-                      RadioListTile<String>(
-                        value: 'COD',
-                        groupValue: _selectedPaymentMethod,
-                        activeColor: const Color(0xFF00875A),
-                        title: const Text('Cash on Delivery / Pay on Delivery', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        secondary: const Icon(Icons.money, color: Colors.green),
-                        onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-                      ),
-                      RadioListTile<String>(
-                        value: 'UPI',
-                        groupValue: _selectedPaymentMethod,
-                        activeColor: const Color(0xFF00875A),
-                        title: const Text('UPI / GooglePay / PhonePe', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        secondary: const Icon(Icons.qr_code_scanner, color: Colors.deepPurple),
-                        onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // 5. BILL DETAILS
-                _buildSectionCard(
-                  title: 'Bill Details',
-                  icon: Icons.receipt_long_outlined,
-                  child: Column(
-                    children: [
-                      _buildBillRow('Item Total', '₹${itemTotal.toStringAsFixed(2)}'),
-                      const SizedBox(height: 8),
-                      _buildBillRow('Delivery Charge', deliveryFee == 0 ? 'FREE' : '₹${deliveryFee.toStringAsFixed(2)}', isFree: deliveryFee == 0),
-                      const SizedBox(height: 8),
-                      _buildBillRow('Handling & Packaging Charge', '₹${handlingFee.toStringAsFixed(2)}'),
-                      const Divider(height: 20),
-                      _buildBillRow('To Pay', '₹${grandTotal.toStringAsFixed(2)}', isBold: true),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 80),
-              ],
-            ),
-          );
-        },
-      ),
-      bottomNavigationBar: Consumer<CartProvider>(
-        builder: (context, cartProvider, child) {
-          final double itemTotal = cartProvider.totalAmount;
-          final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
-          final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
-          final double grandTotal = itemTotal + deliveryFee + handlingFee;
-
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, -4)),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('TOTAL PAYABLE', style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-                    Text(
-                      '₹${grandTotal.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00875A)),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00875A),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: _isPlacingOrder ? null : () => _placeOrder(cartProvider),
-                      child: _isPlacingOrder
-                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Text('PLACE ORDER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,45 @@ class MyOrdersScreen extends StatefulWidget {
 
 class _MyOrdersScreenState extends State<MyOrdersScreen> {
   bool _showOnlyHistory = false;
+
+  // Base64 లేదా Network Image రెండింటినీ హ్యాండిల్ చేసే Helper Widget
+  Widget _buildProductImage(String? imageStr) {
+    if (imageStr == null || imageStr.trim().isEmpty) {
+      return Container(
+        color: Colors.green.shade50,
+        child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+      );
+    }
+
+    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
+      try {
+        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
+        final bytes = base64Decode(cleanBase64.trim());
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: Colors.green.shade50,
+            child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+          ),
+        );
+      } catch (e) {
+        return Container(
+          color: Colors.green.shade50,
+          child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+        );
+      }
+    }
+
+    return Image.network(
+      imageStr,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        color: Colors.green.shade50,
+        child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,6 +301,8 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 ),
               ),
               const SizedBox(height: 10),
+              
+              // ================= Item Section UI Update =================
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
@@ -275,42 +317,82 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     ...items.map((item) {
-                      final itemName = item['name'] ?? 'Product';
-                      final qty = item['quantity'] ?? 1;
+                      final itemName = item['name'] ?? item['title'] ?? 'Product';
+                      final qty = (item['quantity'] ?? 1) as int;
                       final price = ((item['price'] ?? 0) as num).toDouble();
                       final itemTotal = item['totalPrice'] != null 
                           ? ((item['totalPrice']) as num).toDouble() 
                           : (price * qty);
+                      final String? imageUrl = item['imageUrl'] ?? item['image'] ?? item['productImage'];
+                      final String unit = item['unit'] ?? '';
 
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Expanded(
-                              child: Text(
-                                '$itemName x $qty',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                overflow: TextOverflow.ellipsis,
+                            // Product Image Container
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                ),
+                                child: _buildProductImage(imageUrl),
                               ),
                             ),
+                            const SizedBox(width: 10),
+
+                            // Product Name & Qty Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    itemName,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$qty x ₹$price ${unit.isNotEmpty ? '($unit)' : ''}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Calculated Price
                             Text(
-                              '₹$price x $qty = ₹${itemTotal.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade800,
-                                fontWeight: FontWeight.w600,
+                              '₹${itemTotal.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
                               ),
                             ),
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               ),
+              // ========================================================
+
               const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),

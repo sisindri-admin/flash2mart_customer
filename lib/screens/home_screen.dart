@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
-import '../widgets/custom_bottom_navbar.dart'; // 👈 కొత్త Custom Bottom NavBar Import
+import '../widgets/custom_bottom_navbar.dart';
 import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
 import 'my_orders_screen.dart';
+import 'profile_screen.dart';
+import 'help_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,8 +24,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0; // 0: Home, 1: My Orders, 2: Cart, 3: Help
 
-  // Auto-hide bottom bar variables
-  bool _showCartPopup = false;
+  final ValueNotifier<bool> _showCartPopupNotifier = ValueNotifier<bool>(false);
   Timer? _cartTimer;
 
   final TextEditingController _searchController = TextEditingController();
@@ -52,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _cartTimer?.cancel();
+    _showCartPopupNotifier.dispose();
     _searchController.dispose();
     _addressEditController.dispose();
     super.dispose();
@@ -59,15 +61,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _triggerCartPopup() {
     _cartTimer?.cancel();
-    setState(() {
-      _showCartPopup = true;
-    });
+    _showCartPopupNotifier.value = true;
 
     _cartTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        setState(() {
-          _showCartPopup = false;
-        });
+        _showCartPopupNotifier.value = false;
       }
     });
   }
@@ -77,10 +75,12 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        setState(() {
-          _currentAddress = "GPS Off - Select Manually";
-          _isLoadingLocation = false;
-        });
+        if (mounted) {
+          setState(() {
+            _currentAddress = "GPS Off - Select Manually";
+            _isLoadingLocation = false;
+          });
+        }
         return;
       }
 
@@ -88,19 +88,23 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() {
-            _currentAddress = "Permission Denied";
-            _isLoadingLocation = false;
-          });
+          if (mounted) {
+            setState(() {
+              _currentAddress = "Permission Denied";
+              _isLoadingLocation = false;
+            });
+          }
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _currentAddress = "Enable Location in Settings";
-          _isLoadingLocation = false;
-        });
+        if (mounted) {
+          setState(() {
+            _currentAddress = "Enable Location in Settings";
+            _isLoadingLocation = false;
+          });
+        }
         return;
       }
 
@@ -113,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
         position.longitude,
       );
 
-      if (placemarks.isNotEmpty) {
+      if (placemarks.isNotEmpty && mounted) {
         Placemark place = placemarks[0];
         List<String> addressParts = [];
 
@@ -141,11 +145,13 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _currentAddress = "Vedayapalem, Main Road, Nellore - 524004";
-        _addressEditController.text = _currentAddress;
-        _isLoadingLocation = false;
-      });
+      if (mounted) {
+        setState(() {
+          _currentAddress = "Vedayapalem, Main Road, Nellore - 524004";
+          _addressEditController.text = _currentAddress;
+          _isLoadingLocation = false;
+        });
+      }
     }
   }
 
@@ -167,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: MediaQuery.of(context).viewInsets.bottom + 20,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min, // Corrected here
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -310,16 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHelpBody() {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Help & Support"),
-        backgroundColor: const Color(0xFF00875A),
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(
-        child: Text("Support Details & Contact Options"),
-      ),
-    );
+    return const HelpScreen();
   }
 
   @override
@@ -342,31 +339,34 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Selector<CartProvider, int>(
-            selector: (context, cart) => cart.totalQuantity,
-            builder: (context, totalQuantity, child) {
-              if (totalQuantity <= 0 || !_showCartPopup) return const SizedBox.shrink();
+          ValueListenableBuilder<bool>(
+            valueListenable: _showCartPopupNotifier,
+            builder: (context, showPopup, child) {
+              return Selector<CartProvider, int>(
+                selector: (context, cart) => cart.totalQuantity,
+                builder: (context, totalQuantity, child) {
+                  if (totalQuantity <= 0 || !showPopup) return const SizedBox.shrink();
 
-              final cartProvider = Provider.of<CartProvider>(context, listen: false);
-              return AnimatedOpacity(
-                duration: const Duration(milliseconds: 300),
-                opacity: _showCartPopup ? 1.0 : 0.0,
-                child: BottomOrderBar(
-                  totalQuantity: totalQuantity,
-                  totalAmount: cartProvider.totalAmount,
-                  selectedAddress: _currentAddress,
-                  onViewCartPressed: () {
-                    setState(() {
-                      _currentIndex = 2;
-                      _showCartPopup = false;
-                    });
-                  },
-                ),
+                  final cartProvider = Provider.of<CartProvider>(context, listen: false);
+                  return AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: showPopup ? 1.0 : 0.0,
+                    child: BottomOrderBar(
+                      totalQuantity: totalQuantity,
+                      totalAmount: cartProvider.totalAmount,
+                      selectedAddress: _currentAddress,
+                      onViewCartPressed: () {
+                        setState(() {
+                          _currentIndex = 2;
+                        });
+                        _showCartPopupNotifier.value = false;
+                      },
+                    ),
+                  );
+                },
               );
             },
           ),
-          
-          // 👈 వేరుచేసిన Custom Bottom NavBar ను ఇక్కడ కనెక్ట్ చేసాము
           CustomBottomNavBar(
             currentIndex: safeIndex,
             onTap: (index) {
@@ -459,9 +459,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              CircleAvatar(
-                backgroundColor: Colors.white.withOpacity(0.2),
-                child: const Icon(Icons.person_outline, color: Colors.white),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfileScreen(
+                        currentAddress: _currentAddress,
+                        onAddressTap: _showLocationBottomSheet,
+                      ),
+                    ),
+                  );
+                },
+                child: CircleAvatar(
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  child: const Icon(Icons.person_outline, color: Colors.white),
+                ),
               )
             ],
           ),
@@ -592,7 +605,6 @@ class _HomeScreenState extends State<HomeScreen> {
             return Selector<CartProvider, int>(
               selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
               builder: (context, currentQty, child) {
-                final cartProvider = Provider.of<CartProvider>(context, listen: false);
                 return ProductCard(
                   key: ValueKey('product_$productId'),
                   id: productId,
@@ -602,17 +614,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   imageUrl: imageUrl,
                   quantityInCart: currentQty,
                   onAdd: () {
-                    cartProvider.addItem(
-                      id: productId,
-                      name: productName,
-                      price: productPrice,
-                      unit: productUnit,
-                      imageUrl: imageUrl,
-                    );
+                    context.read<CartProvider>().addItem(
+                          id: productId,
+                          name: productName,
+                          price: productPrice,
+                          unit: productUnit,
+                          imageUrl: imageUrl,
+                        );
                     _triggerCartPopup();
                   },
                   onRemove: () {
-                    cartProvider.removeSingleItem(productId);
+                    context.read<CartProvider>().removeSingleItem(productId);
                     _triggerCartPopup();
                   },
                 );
