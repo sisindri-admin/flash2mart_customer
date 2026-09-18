@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
 class OrderTrackingScreen extends StatelessWidget {
   final String orderId;
@@ -13,7 +14,40 @@ class OrderTrackingScreen extends StatelessWidget {
     required this.orderId,
   });
 
-  // Base64 మరియు Network Image హెల్పర్ విజెట్
+  // Phone Call చేసే హెల్పర్ ఫంక్షన్ (దయాల్ ప్యాడ్ కి పంపడానికి)
+  Future<void> _makePhoneCall(String phoneNumber, BuildContext context) async {
+    final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    
+    if (cleanNumber.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Phone number not available')),
+        );
+      }
+      return;
+    }
+
+    final Uri launchUri = Uri(scheme: 'tel', path: cleanNumber);
+    try {
+      if (await canLaunchUrl(launchUri)) {
+        await launchUrl(launchUri);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not open dialer for $cleanNumber')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening dialer: $e')),
+        );
+      }
+    }
+  }
+
+  // Base64 మరియు Network Image Helper Widget
   Widget _buildProductImage(String? imageStr) {
     if (imageStr == null || imageStr.trim().isEmpty) {
       return Container(
@@ -81,25 +115,34 @@ class OrderTrackingScreen extends StatelessWidget {
             );
           }
 
-          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
           final String currentStatus = (data['currentStatus'] ?? data['orderStatus'] ?? data['status'] ?? 'Placed').toString();
           final List<dynamic> trackingHistory = (data['trackingHistory'] as List<dynamic>?) ?? [];
           final List<dynamic> items = (data['items'] as List<dynamic>?) ?? [];
           final String storeName = data['storeName'] ?? 'Merchant Store';
           final String deliveryAddress = data['deliveryAddress'] ?? 'Standard Delivery';
           
-          // Delivery Partner Details
-          final Map<String, dynamic>? deliveryPartner = data['deliveryPartner'];
+          // Delivery Partner Details (Firestore లో నంబర్ లేకపోతే 9281048287 సేవవుతుంది)
+          final Map<String, dynamic>? deliveryPartner = data['deliveryPartner'] as Map<String, dynamic>?;
           final String partnerName = deliveryPartner?['name'] ?? 'Assigning Delivery Partner...';
-          final String partnerPhone = deliveryPartner?['phone'] ?? '';
+          
+          String partnerPhone = (deliveryPartner?['phone'] ?? data['deliveryPartnerPhone'] ?? data['driverPhone'] ?? '').toString().trim();
+          if (partnerPhone.isEmpty) {
+            partnerPhone = '9281048287'; // Default fallback phone number
+          }
+          
           final String partnerRating = (deliveryPartner?['rating'] ?? '4.8').toString();
           final String partnerPhoto = deliveryPartner?['photoUrl'] ?? '';
           
-          // Live Location LatLng
-          final GeoPoint? partnerLoc = data['deliveryPartnerLocation'] ?? data['driverLocation'];
-          final LatLng partnerLatLng = partnerLoc != null
-              ? LatLng(partnerLoc.latitude, partnerLoc.longitude)
-              : const LatLng(14.4426, 79.9865); // Default Coordinates
+          // Live Location LatLng (latlong2)
+          LatLng partnerLatLng = const LatLng(14.4426, 79.9865);
+          if (data['deliveryPartnerLocation'] is GeoPoint) {
+            final GeoPoint loc = data['deliveryPartnerLocation'] as GeoPoint;
+            partnerLatLng = LatLng(loc.latitude, loc.longitude);
+          } else if (data['driverLocation'] is GeoPoint) {
+            final GeoPoint loc = data['driverLocation'] as GeoPoint;
+            partnerLatLng = LatLng(loc.latitude, loc.longitude);
+          }
 
           // Bill Breakdown
           final double itemTotal = (data['itemTotal'] ?? data['itemsTotal'] ?? 0).toDouble();
@@ -170,7 +213,7 @@ class OrderTrackingScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // 2. DELIVERY PARTNER & GOOGLE MAPS LIVE LOCATION CARD
+                // 2. FREE OPENSTREETMAP LIVE LOCATION & DELIVERY PARTNER CARD
                 if (!isCancelled)
                   Container(
                     decoration: BoxDecoration(
@@ -188,46 +231,39 @@ class OrderTrackingScreen extends StatelessWidget {
                     clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [
-                        // Live Google Map / Fallback View (Web ఎర్రర్ రాకుండా సవరించబడింది)
                         SizedBox(
                           height: 180,
                           width: double.infinity,
-                          child: kIsWeb
-                              ? Container(
-                                  color: Colors.blue.shade50,
-                                  child: const Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.map_rounded, color: Color(0xFF2563EB), size: 36),
-                                        SizedBox(height: 6),
-                                        Text(
-                                          'Live Map View (Mobile App Only)',
-                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                                        ),
-                                      ],
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: partnerLatLng,
+                              initialZoom: 14.5,
+                            ),
+                            children: [
+                              TileLayer(
+                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                userAgentPackageName: 'com.flash2mart.customer',
+                                tileProvider: CancellableNetworkTileProvider(),
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: partnerLatLng,
+                                    width: 40,
+                                    height: 40,
+                                    child: const Icon(
+                                      Icons.location_on,
+                                      color: Colors.red,
+                                      size: 38,
                                     ),
                                   ),
-                                )
-                              : GoogleMap(
-                                  initialCameraPosition: CameraPosition(
-                                    target: partnerLatLng,
-                                    zoom: 14.5,
-                                  ),
-                                  markers: {
-                                    Marker(
-                                      markerId: const MarkerId('delivery_partner'),
-                                      position: partnerLatLng,
-                                      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                                      infoWindow: InfoWindow(title: partnerName),
-                                    ),
-                                  },
-                                  zoomControlsEnabled: false,
-                                  myLocationButtonEnabled: false,
-                                ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
 
-                        // Delivery Partner Profile Card
+                        // Delivery Partner Profile & CALL BUTTON Card
                         Padding(
                           padding: const EdgeInsets.all(12),
                           child: Row(
@@ -264,21 +300,23 @@ class OrderTrackingScreen extends StatelessWidget {
                                 ),
                               ),
 
-                              // Call Phone Button
-                              if (partnerPhone.isNotEmpty)
-                                Material(
-                                  color: const Color(0xFF16A34A).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: IconButton(
-                                    icon: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF16A34A), size: 22),
-                                    onPressed: () async {
-                                      final Uri launchUri = Uri(scheme: 'tel', path: partnerPhone);
-                                      if (await canLaunchUrl(launchUri)) {
-                                        await launchUrl(launchUri);
-                                      }
-                                    },
+                              // CALL OPTION BUTTON (డయల్ ప్యాడ్ ఓపెన్ చేసే ఆప్షన్)
+                              InkWell(
+                                onTap: () => _makePhoneCall(partnerPhone, context),
+                                borderRadius: BorderRadius.circular(50),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF16A34A),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.phone_in_talk_rounded,
+                                    color: Colors.white,
+                                    size: 20,
                                   ),
                                 ),
+                              ),
                             ],
                           ),
                         ),

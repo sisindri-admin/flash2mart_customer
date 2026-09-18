@@ -42,6 +42,9 @@ dependencies:
   url_launcher: ^6.3.0
   image_picker: ^1.1.2
   google_maps_flutter: ^2.10.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  flutter_map_cancellable_tile_provider: ^3.0.1
 
   # UI Helper Packages
   google_fonts: ^6.1.0
