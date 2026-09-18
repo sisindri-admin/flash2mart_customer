@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
+import 'order_tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final String? selectedAddress;
@@ -33,7 +34,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
-  // Safe Navigation Handler using /home (Matches main.dart route table)
+  // Safe Navigation Handler using /home
   void _handleBackNavigation() {
     if (_isPlacingOrder) return;
 
@@ -82,7 +83,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Safe Order Placement Function with Firestore Merchant & User Data Fetch
+  // Safe Order Placement Function with Real-time Tracking Array Initializer
   Future<void> _placeOrder(CartProvider cartProvider) async {
     if (cartProvider.items.isEmpty) return;
 
@@ -149,6 +150,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final String finalAddress = widget.selectedAddress ?? 'No Delivery Address Provided';
 
+      // Order Document Data Creation with Initial Tracking Timeline
       await FirebaseFirestore.instance.collection('orders').doc(numericOrderId).set({
         'orderId': numericOrderId,
         'userId': currentUser.uid,
@@ -163,9 +165,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'deliveryAddress': finalAddress,
         'paymentMethod': _selectedPaymentMethod,
         'paymentStatus': _selectedPaymentMethod == 'COD' ? 'Pending' : 'Paid',
-        'orderStatus': 'Pending',
+        'orderStatus': 'Placed',
+        'status': 'Placed',
+        'currentStatus': 'Placed',
         'deliveryInstructions': _instructionController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'trackingHistory': [
+          {
+            'status': 'Placed',
+            'title': 'Order Placed Successfully',
+            'timestamp': DateTime.now().toIso8601String(),
+            'updatedBy': 'Customer',
+          }
+        ],
       });
 
       cartProvider.clearCart();
@@ -214,13 +227,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
               onPressed: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  '/orders',
-                  (route) => false,
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => OrderTrackingScreen(orderId: orderId),
+                  ),
                 );
               },
               child: const Text(
-                'VIEW MY ORDERS',
+                'TRACK LIVE ORDER',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -474,7 +488,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ],
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min, // <--- dynamic ని తీసి MainAxisSize.min కి మార్చబడింది
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Column(
                     mainAxisSize: MainAxisSize.min,

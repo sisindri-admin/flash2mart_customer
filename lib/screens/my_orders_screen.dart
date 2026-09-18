@@ -4,6 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Order tracking detail screen import
+import 'order_tracking_screen.dart';
+
 class MyOrdersScreen extends StatefulWidget {
   const MyOrdersScreen({super.key});
 
@@ -302,7 +305,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
               ),
               const SizedBox(height: 10),
               
-              // ================= Item Section UI Update =================
+              // Item Section UI
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Column(
@@ -332,7 +335,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: [
-                            // Product Image Container
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Container(
@@ -347,8 +349,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-
-                            // Product Name & Qty Info
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,8 +374,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                                 ],
                               ),
                             ),
-
-                            // Calculated Price
                             Text(
                               '₹${itemTotal.toStringAsFixed(0)}',
                               style: const TextStyle(
@@ -391,7 +389,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   ],
                 ),
               ),
-              // ========================================================
 
               const SizedBox(height: 8),
               Padding(
@@ -399,7 +396,7 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                 child: Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
-                    initiallyExpanded: true,
+                    initiallyExpanded: false,
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: const EdgeInsets.only(bottom: 8),
                     title: const Text(
@@ -425,9 +422,40 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                   ),
                 ),
               ),
+
+              // TRACK ORDER BUTTON
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00875A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.location_on_outlined, size: 18),
+                    label: const Text(
+                      'TRACK ORDER LIVE',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrderTrackingScreen(orderId: orderId),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
               if (status.toLowerCase() != 'delivered' && status.toLowerCase() != 'cancelled')
                 Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -473,15 +501,6 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
                             if (await canLaunchUrl(launchUri)) {
                               await launchUrl(launchUri);
                             }
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.map, color: Colors.blue, size: 20),
-                          tooltip: 'Live Map Location',
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Opening Live Map Location...')),
-                            );
                           },
                         ),
                       ],
@@ -586,14 +605,33 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         color = Colors.orange.shade800;
         break;
       case 'preparing':
-        message = "Shop is Packing your Items";
+      case 'accepted':
+        message = "Shop is Preparing your Items";
         icon = Icons.soup_kitchen;
         color = Colors.blue.shade700;
         break;
-      case 'on the way':
+      case 'packing_ready':
+      case 'ready_for_pickup':
+        message = "Packing Ready • Waiting for Delivery Partner Pickup";
+        icon = Icons.inventory_2_outlined;
+        color = const Color(0xFF16A34A);
+        break;
+      case 'out_for_delivery':
       case 'out for delivery':
-        message = "Arriving in $time • Delivery Partner on the way";
+        message = "Out For Delivery • Delivery partner picked up your order";
+        icon = Icons.two_wheeler_rounded;
+        color = const Color(0xFF0284C7);
+        break;
+      case 'on the way':
+      case 'on_the_way':
+        message = "Partner On The Way • Arriving in $time";
         icon = Icons.delivery_dining;
+        color = const Color(0xFF059669);
+        break;
+      case 'reached_location':
+      case 'reached delivery location':
+        message = "Partner Reached Delivery Location • Please receive your order";
+        icon = Icons.location_on_rounded;
         color = const Color(0xFF00875A);
         break;
       case 'delivered':
@@ -635,13 +673,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     );
   }
 
+  // 7 STAGES PROGRESS TIMELINE (Placed -> Preparing -> Packing Ready -> Out For Delivery -> On Way -> Reached Location -> Delivered)
   Widget _buildProgressTimeline(String status) {
     int currentStep = 1;
     final statusLower = status.toLowerCase();
 
-    if (statusLower == 'preparing') currentStep = 2;
-    if (statusLower == 'on the way' || statusLower == 'out for delivery') currentStep = 3;
-    if (statusLower == 'delivered') currentStep = 4;
+    if (statusLower == 'preparing' || statusLower == 'accepted') currentStep = 2;
+    if (statusLower == 'packing_ready' || statusLower == 'ready_for_pickup') currentStep = 3;
+    if (statusLower == 'out_for_delivery' || statusLower == 'out for delivery') currentStep = 4;
+    if (statusLower == 'on the way' || statusLower == 'on_the_way') currentStep = 5;
+    if (statusLower == 'reached_location' || statusLower == 'reached delivery location') currentStep = 6;
+    if (statusLower == 'delivered') currentStep = 7;
 
     return Row(
       children: [
@@ -649,9 +691,15 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
         _buildTimelineLine(currentStep >= 2),
         _buildTimelineStep("Preparing", currentStep >= 2),
         _buildTimelineLine(currentStep >= 3),
-        _buildTimelineStep("On Way", currentStep >= 3),
+        _buildTimelineStep("Packed", currentStep >= 3),
         _buildTimelineLine(currentStep >= 4),
-        _buildTimelineStep("Delivered", currentStep >= 4),
+        _buildTimelineStep("Out Delivery", currentStep >= 4),
+        _buildTimelineLine(currentStep >= 5),
+        _buildTimelineStep("On Way", currentStep >= 5),
+        _buildTimelineLine(currentStep >= 6),
+        _buildTimelineStep("Reached", currentStep >= 6),
+        _buildTimelineLine(currentStep >= 7),
+        _buildTimelineStep("Delivered", currentStep >= 7),
       ],
     );
   }
@@ -660,17 +708,17 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
     return Column(
       children: [
         CircleAvatar(
-          radius: 8,
+          radius: 6,
           backgroundColor: isDone ? const Color(0xFF00875A) : Colors.grey.shade300,
           child: isDone
-              ? const Icon(Icons.check, size: 10, color: Colors.white)
+              ? const Icon(Icons.check, size: 8, color: Colors.white)
               : const SizedBox.shrink(),
         ),
         const SizedBox(height: 2),
         Text(
           label,
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 6.5,
             fontWeight: isDone ? FontWeight.bold : FontWeight.normal,
             color: isDone ? const Color(0xFF00875A) : Colors.grey,
           ),
