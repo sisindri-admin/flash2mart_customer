@@ -64,22 +64,50 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 40),
-                  const Text(
-                    'Flash2Mart ⚡',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF00875A),
+                  const SizedBox(height: 30),
+                  
+                  // APP ICON ONLY (Flash2Mart Text Removed)
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/icon/app_icon.png',
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 90,
+                            height: 90,
+                            color: const Color(0xFF00875A),
+                            child: const Icon(
+                              Icons.shopping_bag,
+                              color: Colors.white,
+                              size: 48,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Welcome back! Login to continue.',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
-                  ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 20),
                   
+                  const Text(
+                    'Welcome back!',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Login to continue your shopping.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                  ),
+                  const SizedBox(height: 36),
+                  
+                  // EMAIL FIELD
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -92,6 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   
+                  // PASSWORD FIELD
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
@@ -104,6 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // LOGIN BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -115,11 +145,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _isLoading ? null : _loginUser,
                       child: _isLoading
                           ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('LOGIN', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                          : const Text(
+                              'LOGIN',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
+                  // REGISTER LINK
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

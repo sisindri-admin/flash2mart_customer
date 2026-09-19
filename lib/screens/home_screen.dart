@@ -9,6 +9,7 @@ import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/custom_bottom_navbar.dart';
 import '../widgets/product_card.dart';
+import '../widgets/offer_slider_banner.dart'; // కొత్త స్లైడర్ ఫైల్
 import 'checkout_screen.dart';
 import 'my_orders_screen.dart';
 import 'profile_screen.dart';
@@ -173,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: MediaQuery.of(context).viewInsets.bottom + 20,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Corrected here
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -303,6 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         children: [
           _buildAttractiveHeader(),
+          const SizedBox(height: 8),
+          // కొత్త ఆటో స్లైడర్ బ్యానర్ ఇక్కడ అమర్చబడింది
+          const OfferSliderBanner(),
           _buildCategoriesList(),
           Expanded(
             child: Padding(
@@ -512,7 +516,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCategoriesList() {
     return Container(
       height: 44,
-      margin: const EdgeInsets.symmetric(vertical: 10),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListView.builder(
         key: const PageStorageKey('categories_list'),
         scrollDirection: Axis.horizontal,
