@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart'; // kIsWeb ని ఉపయోగించడానికి
 import 'package:flutter/material.dart';
 
 class OfferSliderBanner extends StatefulWidget {
@@ -13,25 +14,26 @@ class _OfferSliderBannerState extends State<OfferSliderBanner> {
   int _currentPage = 0;
   Timer? _timer;
 
-  // 'assets/' తీసివేసి కేవలం 'icon/banners' అని ఇవ్వబడింది (404 Error రాకుండా)
+  // ఇమేజ్ పేర్లు
   final List<Map<String, dynamic>> _bannerList = [
     {
       'title': 'Diwali Offers',
-      'imagePath': 'icon/banner1.jpeg',
+      'imageName': 'banner1.jpeg',
     },
     {
       'title': 'Flash Delivery',
-      'imagePath': 'icon/banner2.jpeg',
+      'imageName': 'banner2.jpeg',
     },
     {
       'title': 'Fresh Veggies',
-      'imagePath': 'icon/banner3.jpeg',
+      'imageName': 'banner3.jpeg',
     },
   ];
 
   @override
   void initState() {
     super.initState();
+    // ప్రతి 5 సెకన్లకు ఒకసారి 800ms వేగంతో స్మూత్‌గా స్లైడ్ అవుతుంది
     _timer = Timer.periodic(const Duration(seconds: 5), (Timer timer) {
       if (_currentPage < _bannerList.length - 1) {
         _currentPage++;
@@ -71,7 +73,12 @@ class _OfferSliderBannerState extends State<OfferSliderBanner> {
             itemBuilder: (context, index) {
               final Map<String, dynamic> item = _bannerList[index];
               final String title = (item['title'] ?? '').toString();
-              final String imagePath = (item['imagePath'] ?? '').toString();
+              final String imageName = (item['imageName'] ?? '').toString();
+
+              // Mobile and Web రన్ టైమ్‌కి సరిపోయేలా ఆటో పాత్ హ్యాండ్లింగ్
+              final String fullImagePath = kIsWeb
+                  ? 'icon/$imageName'
+                  : 'assets/icon/$imageName';
 
               return Container(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -87,7 +94,7 @@ class _OfferSliderBannerState extends State<OfferSliderBanner> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Image.asset(
-                  imagePath,
+                  fullImagePath,
                   fit: BoxFit.fill,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
@@ -110,6 +117,7 @@ class _OfferSliderBannerState extends State<OfferSliderBanner> {
           ),
         ),
         const SizedBox(height: 8),
+        // Dots Indicator
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
