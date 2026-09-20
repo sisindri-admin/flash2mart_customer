@@ -13,7 +13,7 @@ class _OfferSliderBannerState extends State<OfferSliderBanner> {
   int _currentPage = 0;
   Timer? _timer;
 
-  // 'assets/' తీసివేసి కేవలం 'icon/' అని ఇవ్వబడింది (404 Error రాకుండా)
+  // 'assets/' తీసివేసి కేవలం 'icon/banners' అని ఇవ్వబడింది (404 Error రాకుండా)
   final List<Map<String, dynamic>> _bannerList = [
     {
       'title': 'Diwali Offers',
