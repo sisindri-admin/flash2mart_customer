@@ -9,7 +9,7 @@ import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/custom_bottom_navbar.dart';
 import '../widgets/product_card.dart';
-import '../widgets/offer_slider_banner.dart'; // కొత్త స్లైడర్ ఫైల్
+import '../widgets/offer_slider_banner.dart';
 import 'checkout_screen.dart';
 import 'my_orders_screen.dart';
 import 'profile_screen.dart';
@@ -23,7 +23,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0; // 0: Home, 1: My Orders, 2: Cart, 3: Help
+  int _currentIndex = 0;
 
   final ValueNotifier<bool> _showCartPopupNotifier = ValueNotifier<bool>(false);
   Timer? _cartTimer;
@@ -304,14 +304,28 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         children: [
           _buildAttractiveHeader(),
-          const SizedBox(height: 8),
-          // కొత్త ఆటో స్లైడర్ బ్యానర్ ఇక్కడ అమర్చబడింది
-          const OfferSliderBanner(),
-          _buildCategoriesList(),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _buildProductsGrid(),
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      const OfferSliderBanner(),
+                      _buildCategoriesList(),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  sliver: _buildProductsSliverGrid(),
+                ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 20),
+                ),
+              ],
             ),
           ),
         ],
@@ -551,22 +565,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductsGrid() {
+  Widget _buildProductsSliverGrid() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('products').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF00875A)));
+          return const SliverToBoxAdapter(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: CircularProgressIndicator(color: Color(0xFF00875A)),
+              ),
+            ),
+          );
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+          return SliverToBoxAdapter(
+            child: Center(
+              child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+            ),
           );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('ఉత్పత్తులు అందుబాటులో లేవు.'));
+          return const SliverToBoxAdapter(
+            child: Center(child: Text('ఉత్పత్తులు అందుబాటులో లేవు.')),
+          );
         }
 
         final docs = snapshot.data!.docs.where((doc) {
@@ -583,58 +608,72 @@ class _HomeScreenState extends State<HomeScreen> {
         }).toList();
 
         if (docs.isEmpty) {
-          return const Center(child: Text('ఫలితాలు ఏవీ దొరకలేదు.'));
+          return const SliverToBoxAdapter(
+            child: Center(child: Text('ఫలితాలు ఏవీ దొరకలేదు.')),
+          );
         }
 
-        return GridView.builder(
-          key: const PageStorageKey('home_products_grid'),
-          physics: const BouncingScrollPhysics(),
-          itemCount: docs.length,
+        return SliverGrid(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final doc = docs[index];
+              final data = doc.data() as Map<String, dynamic>;
+
+              final productId = doc.id;
+              final productName = data['name'] ?? data['title'] ?? 'Product';
+              final productPrice = ((data['price'] ?? 0) as num).toDouble();
+              final double marketPrice = ((data['marketPrice'] ?? productPrice) as num).toDouble();
+              final productUnit = data['unit'] ?? data['weight'] ?? '1 unit';
+              final imageUrl = data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '';
+              final int productStock = ((data['stock'] ?? 1) as num).toInt();
+
+              // Merchant/Category details passed directly from Firestore product doc
+              final String merchantId = data['merchantId'] ?? '';
+              final String category = data['category'] ?? 'Grocery / Supermarket';
+              final String description = data['description'] ?? '';
+
+              return Selector<CartProvider, int>(
+                selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
+                builder: (context, currentQty, child) {
+                  return ProductCard(
+                    key: ValueKey('product_$productId'),
+                    id: productId,
+                    name: productName,
+                    price: productPrice,
+                    marketPrice: marketPrice,
+                    unit: productUnit,
+                    imageUrl: imageUrl,
+                    stock: productStock,
+                    merchantId: merchantId,
+                    category: category,
+                    description: description,
+                    quantityInCart: currentQty,
+                    onAdd: () {
+                      context.read<CartProvider>().addItem(
+                            id: productId,
+                            name: productName,
+                            price: productPrice,
+                            unit: productUnit,
+                            imageUrl: imageUrl,
+                          );
+                      _triggerCartPopup();
+                    },
+                    onRemove: () {
+                      context.read<CartProvider>().removeSingleItem(productId);
+                      _triggerCartPopup();
+                    },
+                  );
+                },
+              );
+            },
+            childCount: docs.length,
+          ),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            childAspectRatio: 0.68,
+            childAspectRatio: 0.63,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemBuilder: (context, index) {
-            final doc = docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-
-            final productId = doc.id;
-            final productName = data['name'] ?? data['title'] ?? 'Product';
-            final productPrice = ((data['price'] ?? 0) as num).toDouble();
-            final productUnit = data['unit'] ?? data['weight'] ?? '1 unit';
-            final imageUrl = data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '';
-
-            return Selector<CartProvider, int>(
-              selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
-              builder: (context, currentQty, child) {
-                return ProductCard(
-                  key: ValueKey('product_$productId'),
-                  id: productId,
-                  name: productName,
-                  price: productPrice,
-                  unit: productUnit,
-                  imageUrl: imageUrl,
-                  quantityInCart: currentQty,
-                  onAdd: () {
-                    context.read<CartProvider>().addItem(
-                          id: productId,
-                          name: productName,
-                          price: productPrice,
-                          unit: productUnit,
-                          imageUrl: imageUrl,
-                        );
-                    _triggerCartPopup();
-                  },
-                  onRemove: () {
-                    context.read<CartProvider>().removeSingleItem(productId);
-                    _triggerCartPopup();
-                  },
-                );
-              },
-            );
-          },
         );
       },
     );
