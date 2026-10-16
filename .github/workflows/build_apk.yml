@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - dev-flash2mart-customer-app
+      - dev-customer-app
 
 permissions:
   contents: write
