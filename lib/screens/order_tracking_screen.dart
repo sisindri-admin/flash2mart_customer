@@ -8,13 +8,20 @@ import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_ti
 
 import 'home_screen.dart'; // HomeScreen / MyOrders tab navigation kosam
 
-class OrderTrackingScreen extends StatelessWidget {
+class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
 
   const OrderTrackingScreen({
     super.key,
     required this.orderId,
   });
+
+  @override
+  State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+}
+
+class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
+  final MapController _mapController = MapController();
 
   // Direct ga My Orders screen / tab ki velle navigation helper
   void _navigateToMyOrders(BuildContext context) {
@@ -118,7 +125,7 @@ class OrderTrackingScreen extends StatelessWidget {
             onPressed: () => _navigateToMyOrders(context),
           ),
           title: Text(
-            'Track Order #$orderId',
+            'Track Order #${widget.orderId}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           backgroundColor: Colors.white,
@@ -126,7 +133,7 @@ class OrderTrackingScreen extends StatelessWidget {
           elevation: 0.5,
         ),
         body: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('orders').doc(orderId).snapshots(),
+          stream: FirebaseFirestore.instance.collection('orders').doc(widget.orderId).snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -160,8 +167,10 @@ class OrderTrackingScreen extends StatelessWidget {
             final String partnerRating = (deliveryPartner?['rating'] ?? '4.8').toString();
             final String partnerPhoto = deliveryPartner?['photoUrl'] ?? '';
             
-            // Live Location LatLng (latlong2)
+            // Live Location LatLng (latlong2) & Heading Angle
             LatLng partnerLatLng = const LatLng(14.4426, 79.9865);
+            double heading = (data['heading'] ?? 0.0).toDouble();
+
             if (data['deliveryPartnerLocation'] is GeoPoint) {
               final GeoPoint loc = data['deliveryPartnerLocation'] as GeoPoint;
               partnerLatLng = LatLng(loc.latitude, loc.longitude);
@@ -169,6 +178,13 @@ class OrderTrackingScreen extends StatelessWidget {
               final GeoPoint loc = data['driverLocation'] as GeoPoint;
               partnerLatLng = LatLng(loc.latitude, loc.longitude);
             }
+
+            // 🚀 Camera auto-shift to partner's location on update
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              try {
+                _mapController.move(partnerLatLng, _mapController.camera.zoom);
+              } catch (_) {}
+            });
 
             // Bill Breakdown
             final double itemTotal = (data['itemTotal'] ?? data['itemsTotal'] ?? 0).toDouble();
@@ -258,12 +274,13 @@ class OrderTrackingScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           SizedBox(
-                            height: 180,
+                            height: 200,
                             width: double.infinity,
                             child: FlutterMap(
+                              mapController: _mapController,
                               options: MapOptions(
                                 initialCenter: partnerLatLng,
-                                initialZoom: 14.5,
+                                initialZoom: 15.5,
                               ),
                               children: [
                                 TileLayer(
@@ -275,12 +292,29 @@ class OrderTrackingScreen extends StatelessWidget {
                                   markers: [
                                     Marker(
                                       point: partnerLatLng,
-                                      width: 40,
-                                      height: 40,
-                                      child: const Icon(
-                                        Icons.location_on,
-                                        color: Colors.red,
-                                        size: 38,
+                                      width: 44,
+                                      height: 44,
+                                      child: Transform.rotate(
+                                        angle: heading * (3.141592653589793 / 180), // Heading Angle Rotation
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.orange,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black26,
+                                                blurRadius: 4,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.two_wheeler_rounded,
+                                            color: Colors.white,
+                                            size: 26,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
