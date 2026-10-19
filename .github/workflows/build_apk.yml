@@ -6,6 +6,7 @@ on:
       - main
       - master
       - dev-customer-app
+      - dev-delivery-app-2
 
 permissions:
   contents: write

@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 
-import 'home_screen.dart'; // HomeScreen / MyOrders tab navigation kosam
+import 'home_screen.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   final String orderId;
@@ -23,7 +22,6 @@ class OrderTrackingScreen extends StatefulWidget {
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   final MapController _mapController = MapController();
 
-  // Direct ga My Orders screen / tab ki velle navigation helper
   void _navigateToMyOrders(BuildContext context) {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -31,13 +29,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => const HomeScreen(), // Home screen 1st tab or My Orders view
+          builder: (context) => const HomeScreen(),
         ),
       );
     }
   }
 
-  // Phone Call చేసే హెల్పర్ ఫంక్షన్ (డయాల్ ప్యాడ్ కి పంపడానికి)
   Future<void> _makePhoneCall(String phoneNumber, BuildContext context) async {
     final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
     
@@ -70,7 +67,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
-  // Base64 మరియు Network Image Helper Widget
   Widget _buildProductImage(String? imageStr) {
     if (imageStr == null || imageStr.trim().isEmpty) {
       return Container(
@@ -155,7 +151,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             final String storeName = data['storeName'] ?? 'Merchant Store';
             final String deliveryAddress = data['deliveryAddress'] ?? 'Standard Delivery';
             
-            // Delivery Partner Details
             final Map<String, dynamic>? deliveryPartner = data['deliveryPartner'] as Map<String, dynamic>?;
             final String partnerName = deliveryPartner?['name'] ?? 'Assigning Delivery Partner...';
             
@@ -167,7 +162,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             final String partnerRating = (deliveryPartner?['rating'] ?? '4.8').toString();
             final String partnerPhoto = deliveryPartner?['photoUrl'] ?? '';
             
-            // Live Location LatLng (latlong2) & Heading Angle
+            // 1. Delivery Partner LatLng
             LatLng partnerLatLng = const LatLng(14.4426, 79.9865);
             double heading = (data['heading'] ?? 0.0).toDouble();
 
@@ -179,14 +174,32 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               partnerLatLng = LatLng(loc.latitude, loc.longitude);
             }
 
-            // 🚀 Camera auto-shift to partner's location on update
+            // 2. Customer Destination LatLng
+            LatLng customerLatLng = const LatLng(14.4450, 79.9880);
+            if (data['customerLocation'] is GeoPoint) {
+              final GeoPoint cLoc = data['customerLocation'] as GeoPoint;
+              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
+            } else if (data['userLocation'] is GeoPoint) {
+              final GeoPoint cLoc = data['userLocation'] as GeoPoint;
+              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
+            } else if (data['deliveryLocation'] is GeoPoint) {
+              final GeoPoint cLoc = data['deliveryLocation'] as GeoPoint;
+              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
+            }
+
+            // Safe Camera Movement Frame
             WidgetsBinding.instance.addPostFrameCallback((_) {
               try {
-                _mapController.move(partnerLatLng, _mapController.camera.zoom);
+                final bounds = LatLngBounds.fromPoints([partnerLatLng, customerLatLng]);
+                _mapController.fitCamera(
+                  CameraFit.bounds(
+                    bounds: bounds,
+                    padding: const EdgeInsets.all(40.0),
+                  ),
+                );
               } catch (_) {}
             });
 
-            // Bill Breakdown
             final double itemTotal = (data['itemTotal'] ?? data['itemsTotal'] ?? 0).toDouble();
             final double deliveryFee = (data['deliveryFee'] ?? 0).toDouble();
             final double handlingFee = (data['handlingFee'] ?? data['taxes'] ?? 0).toDouble();
@@ -202,7 +215,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. LIVE STATUS HIGHLIGHT CARD
+                  // 1. LIVE STATUS
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -255,7 +268,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 2. FREE OPENSTREETMAP LIVE LOCATION & DELIVERY PARTNER CARD
+                  // 2. LIVE OPENSTREETMAP DISPLAY
                   if (!isCancelled)
                     Container(
                       decoration: BoxDecoration(
@@ -274,28 +287,28 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                       child: Column(
                         children: [
                           SizedBox(
-                            height: 200,
+                            height: 230,
                             width: double.infinity,
                             child: FlutterMap(
                               mapController: _mapController,
                               options: MapOptions(
                                 initialCenter: partnerLatLng,
-                                initialZoom: 15.5,
+                                initialZoom: 14.5,
                               ),
                               children: [
                                 TileLayer(
                                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                                   userAgentPackageName: 'com.flash2mart.customer',
-                                  tileProvider: CancellableNetworkTileProvider(),
                                 ),
                                 MarkerLayer(
                                   markers: [
+                                    // A. Delivery Partner Bike Marker
                                     Marker(
                                       point: partnerLatLng,
                                       width: 44,
                                       height: 44,
                                       child: Transform.rotate(
-                                        angle: heading * (3.141592653589793 / 180), // Heading Angle Rotation
+                                        angle: heading * (3.141592653589793 / 180),
                                         child: Container(
                                           padding: const EdgeInsets.all(6),
                                           decoration: const BoxDecoration(
@@ -317,13 +330,39 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                         ),
                                       ),
                                     ),
+
+                                    // B. Customer Destination Marker
+                                    Marker(
+                                      point: customerLatLng,
+                                      width: 42,
+                                      height: 42,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.redAccent,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black26,
+                                              blurRadius: 4,
+                                              offset: Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.location_on_rounded,
+                                          color: Colors.white,
+                                          size: 24,
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
                             ),
                           ),
 
-                          // Delivery Partner Profile & CALL BUTTON Card
+                          // Delivery Partner Profile
                           Padding(
                             padding: const EdgeInsets.all(12),
                             child: Row(
@@ -360,7 +399,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                   ),
                                 ),
 
-                                // CALL OPTION BUTTON
                                 InkWell(
                                   onTap: () => _makePhoneCall(partnerPhone, context),
                                   borderRadius: BorderRadius.circular(50),
@@ -385,7 +423,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     ),
                   const SizedBox(height: 20),
 
-                  // 3. REAL-TIME TRACKING TIMELINE
+                  // 3. TRACKING TIMELINE
                   const Text(
                     'Order Journey Timeline',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
@@ -466,7 +504,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 4. PRODUCTS LIST WITH IMAGES
+                  // 4. ITEMS ORDERED
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -535,7 +573,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 5. BILL DETAILS & PAYMENT SUMMARY
+                  // 5. BILL DETAILS
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(

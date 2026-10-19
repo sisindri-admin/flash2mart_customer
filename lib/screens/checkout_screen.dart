@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
@@ -24,14 +25,62 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'COD';
   bool _isPlacingOrder = false;
 
+  // Live Location State
+  Position? _currentCustomerPosition;
+  bool _isFetchingLocation = false;
+
   final TextEditingController _instructionController = TextEditingController();
   final ScrollController _scrollController = ScrollController(keepScrollOffset: true);
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveCustomerLocation();
+  }
 
   @override
   void dispose() {
     _instructionController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // 1. GPS Live Location Fetcher Helper
+  Future<void> _fetchLiveCustomerLocation() async {
+    setState(() => _isFetchingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _isFetchingLocation = false);
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _isFetchingLocation = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _isFetchingLocation = false);
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      setState(() {
+        _currentCustomerPosition = pos;
+        _isFetchingLocation = false;
+      });
+    } catch (e) {
+      debugPrint("Error fetching customer live location: $e");
+      setState(() => _isFetchingLocation = false);
+    }
   }
 
   // Safe Navigation Handler using /home
@@ -83,7 +132,177 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Safe Order Placement Function with Real-time Tracking Array Initializer
+  // 2. ORDER SUMMARY BOTTOM SHEET WITH ACCEPT / RECHECK BUTTONS
+  void _showOrderSummaryBottomSheet(CartProvider cartProvider) {
+    final cartItems = cartProvider.items.values.toList();
+    final double itemTotal = cartProvider.totalAmount;
+    final double deliveryFee = itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
+    final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
+    final double grandTotal = itemTotal + deliveryFee + handlingFee;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 18,
+                right: 18,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sheet Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Order Summary Review',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.grey),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+
+                    // Live Location Recheck Card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.my_location_rounded, color: Color(0xFF2563EB), size: 18),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Delivery Live GPS Location',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                                  ),
+                                ],
+                              ),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: _isFetchingLocation
+                                    ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                    : const Icon(Icons.refresh_rounded, size: 14),
+                                label: const Text('Re-check', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                onPressed: () async {
+                                  setModalState(() => _isFetchingLocation = true);
+                                  await _fetchLiveCustomerLocation();
+                                  setModalState(() => _isFetchingLocation = false);
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _currentCustomerPosition != null
+                                ? 'Lat: ${_currentCustomerPosition!.latitude.toStringAsFixed(5)}, Long: ${_currentCustomerPosition!.longitude.toStringAsFixed(5)}'
+                                : 'Fetching live location coordinates...',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Items List
+                    const Text('Items in Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    ...cartItems.map((item) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${item.quantity}x ${item.name}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                              Text('₹${(item.price * item.quantity).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        )),
+                    const Divider(height: 20),
+
+                    // Bill Summary
+                    _buildBillRow('Item Total', '₹${itemTotal.toStringAsFixed(2)}'),
+                    const SizedBox(height: 4),
+                    _buildBillRow('Delivery Charge', deliveryFee == 0 ? 'FREE' : '₹${deliveryFee.toStringAsFixed(2)}', isFree: deliveryFee == 0),
+                    const SizedBox(height: 4),
+                    _buildBillRow('Handling Fee', '₹${handlingFee.toStringAsFixed(2)}'),
+                    const Divider(height: 16),
+                    _buildBillRow('Grand Total', '₹${grandTotal.toStringAsFixed(2)}', isBold: true),
+
+                    const SizedBox(height: 20),
+
+                    // Cancel & Accept Confirmation Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.redAccent),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('CANCEL', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00875A),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                            label: const Text('CONFIRM & PLACE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _placeOrder(cartProvider);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 3. Safe Order Placement Function with Customer GeoPoint Sync
   Future<void> _placeOrder(CartProvider cartProvider) async {
     if (cartProvider.items.isEmpty) return;
 
@@ -150,7 +369,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final String finalAddress = widget.selectedAddress ?? 'No Delivery Address Provided';
 
-      // Order Document Data Creation with Initial Tracking Timeline
+      // Customer Live GPS Location Conversion to GeoPoint
+      GeoPoint? customerGeoPoint;
+      if (_currentCustomerPosition != null) {
+        customerGeoPoint = GeoPoint(_currentCustomerPosition!.latitude, _currentCustomerPosition!.longitude);
+      }
+
+      // Firestore Order Collection Entry with Customer GeoPoint
       await FirebaseFirestore.instance.collection('orders').doc(numericOrderId).set({
         'orderId': numericOrderId,
         'userId': currentUser.uid,
@@ -163,6 +388,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'handlingFee': handlingFee,
         'grandTotal': grandTotal,
         'deliveryAddress': finalAddress,
+        'customerLocation': customerGeoPoint, // 🚀 Delivery Partner App Map Indicator LatLongs
+        'userLocation': customerGeoPoint,
         'paymentMethod': _selectedPaymentMethod,
         'paymentStatus': _selectedPaymentMethod == 'COD' ? 'Pending' : 'Paid',
         'orderStatus': 'Placed',
@@ -510,7 +737,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           backgroundColor: const Color(0xFF00875A),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        onPressed: _isPlacingOrder ? null : () => _placeOrder(cartProvider),
+                        onPressed: _isPlacingOrder ? null : () => _showOrderSummaryBottomSheet(cartProvider),
                         child: _isPlacingOrder
                             ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Text('PLACE ORDER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
