@@ -36,7 +36,7 @@ class AppLogo extends StatelessWidget {
           text: TextSpan(
             style: TextStyle(
               fontSize: size * 0.28,
-              fontWeight: FontWeight.extrabold,
+              fontWeight: FontWeight.w800,
               letterSpacing: -0.5,
             ),
             children: const [

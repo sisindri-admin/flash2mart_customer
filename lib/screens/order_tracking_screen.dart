@@ -1,10 +1,13 @@
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/order_tracking_model.dart';
+import '../widgets/order_tracking/live_tracking_map_card.dart';
+import '../widgets/order_tracking/order_items_bill_card.dart';
+import '../widgets/order_tracking/order_status_stepper_card.dart';
+import '../widgets/order_tracking/order_timeline_card.dart';
+import 'help_screen.dart';
 import 'home_screen.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
@@ -20,7 +23,7 @@ class OrderTrackingScreen extends StatefulWidget {
 }
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
-  final MapController _mapController = MapController();
+  bool _isCancelling = false;
 
   void _navigateToMyOrders(BuildContext context) {
     if (Navigator.canPop(context)) {
@@ -28,20 +31,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     }
   }
 
-  Future<void> _makePhoneCall(String phoneNumber, BuildContext context) async {
-    final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
-    
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final String cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+
     if (cleanNumber.isEmpty) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Phone number not available')),
+          const SnackBar(content: Text('Phone number not available yet')),
         );
       }
       return;
@@ -51,15 +52,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     try {
       if (await canLaunchUrl(launchUri)) {
         await launchUrl(launchUri);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not open dialer for $cleanNumber')),
-          );
-        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open dialer for $cleanNumber')),
+        );
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error opening dialer: $e')),
         );
@@ -67,42 +66,128 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
-  Widget _buildProductImage(String? imageStr) {
-    if (imageStr == null || imageStr.trim().isEmpty) {
-      return Container(
-        color: Colors.green.shade50,
-        child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
-      );
-    }
+  Future<void> _confirmAndCancelOrder() async {
+    final TextEditingController reasonController = TextEditingController();
+    String selectedReason = 'Ordered by mistake';
+    final List<String> cancelReasons = [
+      'Ordered by mistake',
+      'Want to change items or address',
+      'Delivery taking longer than expected',
+      'Other reason',
+    ];
 
-    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
-      try {
-        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
-        final bytes = base64Decode(cleanBase64.trim());
-        return Image.memory(
-          bytes,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: Colors.green.shade50,
-            child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Cancel Order?',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
           ),
-        );
-      } catch (e) {
-        return Container(
-          color: Colors.green.shade50,
-          child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
-        );
-      }
-    }
-
-    return Image.network(
-      imageStr,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        color: Colors.green.shade50,
-        child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Please select a reason for cancelling this order:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+              ),
+              const SizedBox(height: 10),
+              ...cancelReasons.map((reason) {
+                return RadioListTile<String>(
+                  value: reason,
+                  groupValue: selectedReason,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFFDC2626),
+                  title: Text(reason, style: const TextStyle(fontSize: 13)),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => selectedReason = val);
+                    }
+                  },
+                );
+              }),
+              if (selectedReason == 'Other reason') ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: reasonController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter reason...',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Keep Order'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Confirm Cancel'),
+            ),
+          ],
+        ),
       ),
     );
+
+    if (confirmed != true || !mounted) return;
+
+    final String finalReason = selectedReason == 'Other reason' &&
+            reasonController.text.trim().isNotEmpty
+        ? reasonController.text.trim()
+        : selectedReason;
+
+    setState(() => _isCancelling = true);
+    try {
+      await FirebaseFirestore.instance.collection('orders').doc(widget.orderId).update({
+        'status': 'Cancelled',
+        'orderStatus': 'Cancelled',
+        'currentStatus': 'Cancelled',
+        'cancelReason': finalReason,
+        'cancelledBy': 'Customer',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'trackingHistory': FieldValue.arrayUnion([
+          {
+            'status': 'Cancelled',
+            'title': 'Order Cancelled by Customer ($finalReason)',
+            'timestamp': DateTime.now().toIso8601String(),
+            'updatedBy': 'Customer',
+          }
+        ]),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order cancelled successfully'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not cancel order: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCancelling = false);
+      }
+    }
   }
 
   @override
@@ -122,580 +207,97 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
           title: Text(
             'Track Order #${widget.orderId}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17.5),
           ),
           backgroundColor: Colors.white,
           foregroundColor: const Color(0xFF1E293B),
           elevation: 0.5,
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HelpScreen()),
+                );
+              },
+              icon: const Icon(Icons.support_agent_rounded, size: 18, color: Color(0xFF00875A)),
+              label: const Text(
+                'Help',
+                style: TextStyle(
+                  color: Color(0xFF00875A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
         ),
         body: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('orders').doc(widget.orderId).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('orders')
+              .doc(widget.orderId)
+              .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF00875A)),
+              );
             }
 
             if (!snapshot.hasData || !snapshot.data!.exists) {
               return const Center(
                 child: Text(
                   'Order details not found',
-                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               );
             }
 
             final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-            final String currentStatus = (data['currentStatus'] ?? data['orderStatus'] ?? data['status'] ?? 'Placed').toString();
-            final List<dynamic> trackingHistory = (data['trackingHistory'] as List<dynamic>?) ?? [];
-            final List<dynamic> items = (data['items'] as List<dynamic>?) ?? [];
-            final String storeName = data['storeName'] ?? 'Merchant Store';
-            final String deliveryAddress = data['deliveryAddress'] ?? 'Standard Delivery';
-            
-            final Map<String, dynamic>? deliveryPartner = data['deliveryPartner'] as Map<String, dynamic>?;
-            final String partnerName = deliveryPartner?['name'] ?? 'Assigning Delivery Partner...';
-            
-            String partnerPhone = (deliveryPartner?['phone'] ?? data['deliveryPartnerPhone'] ?? data['driverPhone'] ?? '').toString().trim();
-            if (partnerPhone.isEmpty) {
-              partnerPhone = '9281048287';
-            }
-            
-            final String partnerRating = (deliveryPartner?['rating'] ?? '4.8').toString();
-            final String partnerPhoto = deliveryPartner?['photoUrl'] ?? '';
-            
-            // 1. Delivery Partner LatLng
-            LatLng partnerLatLng = const LatLng(14.4426, 79.9865);
-            double heading = (data['heading'] ?? 0.0).toDouble();
-
-            if (data['deliveryPartnerLocation'] is GeoPoint) {
-              final GeoPoint loc = data['deliveryPartnerLocation'] as GeoPoint;
-              partnerLatLng = LatLng(loc.latitude, loc.longitude);
-            } else if (data['driverLocation'] is GeoPoint) {
-              final GeoPoint loc = data['driverLocation'] as GeoPoint;
-              partnerLatLng = LatLng(loc.latitude, loc.longitude);
-            }
-
-            // 2. Customer Destination LatLng
-            LatLng customerLatLng = const LatLng(14.4450, 79.9880);
-            if (data['customerLocation'] is GeoPoint) {
-              final GeoPoint cLoc = data['customerLocation'] as GeoPoint;
-              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
-            } else if (data['userLocation'] is GeoPoint) {
-              final GeoPoint cLoc = data['userLocation'] as GeoPoint;
-              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
-            } else if (data['deliveryLocation'] is GeoPoint) {
-              final GeoPoint cLoc = data['deliveryLocation'] as GeoPoint;
-              customerLatLng = LatLng(cLoc.latitude, cLoc.longitude);
-            }
-
-            // Safe Camera Movement Frame
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              try {
-                final bounds = LatLngBounds.fromPoints([partnerLatLng, customerLatLng]);
-                _mapController.fitCamera(
-                  CameraFit.bounds(
-                    bounds: bounds,
-                    padding: const EdgeInsets.all(40.0),
-                  ),
-                );
-              } catch (_) {}
-            });
-
-            final double itemTotal = (data['itemTotal'] ?? data['itemsTotal'] ?? 0).toDouble();
-            final double deliveryFee = (data['deliveryFee'] ?? 0).toDouble();
-            final double handlingFee = (data['handlingFee'] ?? data['taxes'] ?? 0).toDouble();
-            final double grandTotal = (data['grandTotal'] ?? data['totalAmount'] ?? (itemTotal + deliveryFee + handlingFee)).toDouble();
-            
-            final String paymentMethod = (data['paymentMethod'] ?? 'COD').toString();
-            final String paymentStatus = (data['paymentStatus'] ?? 'Pending').toString();
-
-            final bool isCancelled = currentStatus.toLowerCase() == 'cancelled';
+            final model = OrderTrackingModel.fromFirestore(widget.orderId, data);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. LIVE STATUS
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isCancelled ? const Color(0xFFFEE2E2) : const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isCancelled ? Colors.redAccent : const Color(0xFFBFDBFE),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Store: $storeName',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(
-                              isCancelled ? Icons.cancel_rounded : Icons.local_shipping_rounded,
-                              color: isCancelled ? Colors.redAccent : const Color(0xFF2563EB),
-                              size: 28,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'CURRENT STATUS',
-                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
-                                  ),
-                                  Text(
-                                    currentStatus.replaceAll('_', ' ').toUpperCase(),
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
-                                      color: isCancelled ? Colors.redAccent : const Color(0xFF2563EB),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  // 1. LIVE STATUS BANNER + 5-STEP STEPPER + 4-DIGIT DELIVERY OTP
+                  OrderStatusStepperCard(
+                    model: model,
+                    onCancelTap: _isCancelling ? null : _confirmAndCancelOrder,
                   ),
                   const SizedBox(height: 16),
 
-                  // 2. LIVE OPENSTREETMAP DISPLAY
-                  if (!isCancelled)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            height: 230,
-                            width: double.infinity,
-                            child: FlutterMap(
-                              mapController: _mapController,
-                              options: MapOptions(
-                                initialCenter: partnerLatLng,
-                                initialZoom: 14.5,
-                              ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.flash2mart.customer',
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    // A. Delivery Partner Bike Marker
-                                    Marker(
-                                      point: partnerLatLng,
-                                      width: 44,
-                                      height: 44,
-                                      child: Transform.rotate(
-                                        angle: heading * (3.141592653589793 / 180),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: const BoxDecoration(
-                                            color: Colors.orange,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black26,
-                                                blurRadius: 4,
-                                                offset: Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: const Icon(
-                                            Icons.two_wheeler_rounded,
-                                            color: Colors.white,
-                                            size: 26,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    // B. Customer Destination Marker
-                                    Marker(
-                                      point: customerLatLng,
-                                      width: 42,
-                                      height: 42,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.redAccent,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black26,
-                                              blurRadius: 4,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.location_on_rounded,
-                                          color: Colors.white,
-                                          size: 24,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Delivery Partner Profile
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: const Color(0xFF00875A).withOpacity(0.1),
-                                  backgroundImage: partnerPhoto.isNotEmpty ? NetworkImage(partnerPhoto) : null,
-                                  child: partnerPhoto.isEmpty
-                                      ? const Icon(Icons.person, color: Color(0xFF00875A), size: 24)
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        partnerName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '$partnerRating • Delivery Partner',
-                                            style: const TextStyle(fontSize: 11.5, color: Colors.grey, fontWeight: FontWeight.w500),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                InkWell(
-                                  onTap: () => _makePhoneCall(partnerPhone, context),
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF16A34A),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.phone_in_talk_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                  // 2. LIVE OPENSTREETMAP + AUTO-FOLLOW + PARTNER PROFILE & CALL
+                  if (!model.isCancelled) ...[
+                    LiveTrackingMapCard(
+                      model: model,
+                      onCallPartner: _makePhoneCall,
                     ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+                  ],
 
-                  // 3. TRACKING TIMELINE
-                  const Text(
-                    'Order Journey Timeline',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: trackingHistory.isEmpty
-                        ? const Text('Tracking details updating...')
-                        : ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: trackingHistory.length,
-                            itemBuilder: (context, index) {
-                              final step = trackingHistory[index] as Map<String, dynamic>;
-                              final String title = step['title'] ?? step['status'] ?? '';
-                              final String updatedBy = step['updatedBy'] ?? 'System';
-                              final String timestamp = step['timestamp'] ?? '';
-                              final bool isLast = index == trackingHistory.length - 1;
-
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Column(
-                                    children: [
-                                      Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF16A34A),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(Icons.check, size: 14, color: Colors.white),
-                                      ),
-                                      if (!isLast)
-                                        Container(
-                                          width: 2,
-                                          height: 38,
-                                          color: const Color(0xFF22C55E),
-                                        ),
-                                    ],
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(bottom: 14),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            title,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            'Updated by $updatedBy',
-                                            style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                          ),
-                                          if (timestamp.isNotEmpty)
-                                            Text(
-                                              timestamp.length > 16 ? timestamp.substring(0, 16).replaceAll('T', ' ') : timestamp,
-                                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 4. ITEMS ORDERED
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Items Ordered',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                        ),
-                        const Divider(height: 16),
-                        ...items.map((item) {
-                          final String? imageUrl = item['imageUrl'] ?? item['image'] ?? item['productImage'];
-                          final String unit = item['unit'] ?? '';
-
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Container(
-                                    width: 46,
-                                    height: 46,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey.shade200),
-                                    ),
-                                    child: _buildProductImage(imageUrl),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item['name'] ?? 'Product',
-                                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${item['quantity'] ?? 1}x ${unit.isNotEmpty ? '($unit)' : ''}',
-                                        style: const TextStyle(fontSize: 11.5, color: Colors.grey),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  '₹${item['totalPrice'] ?? item['price']}',
-                                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
+                  // 3. REAL-TIME MERGED TRACKING TIMELINE
+                  OrderTimelineCard(
+                    timeline: model.timeline,
+                    isCancelled: model.isCancelled,
                   ),
                   const SizedBox(height: 16),
 
-                  // 5. BILL DETAILS
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Bill Details & Payment Info',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                        ),
-                        const Divider(height: 16),
-                        _buildBillRow('Item Total', itemTotal),
-                        const SizedBox(height: 6),
-                        _buildBillRow('Delivery Fee', deliveryFee, isFree: deliveryFee == 0),
-                        const SizedBox(height: 6),
-                        _buildBillRow('Handling & Taxes', handlingFee),
-                        const Divider(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Grand Total Paid:',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                            Text(
-                              '₹${grandTotal.toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF16A34A)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Payment Method: ${paymentMethod.toUpperCase()}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
-                              ),
-                              Text(
-                                'Status: ${paymentStatus.toUpperCase()}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: paymentStatus.toLowerCase() == 'paid' ? Colors.green : Colors.orange.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 6. DELIVERY ADDRESS
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Delivery Address',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.location_on, size: 18, color: Color(0xFF2563EB)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                deliveryAddress,
-                                style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.3),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  // 4. ITEMS ORDERED, BILL SUMMARY & ADDRESS/INSTRUCTIONS
+                  OrderItemsAndBillSection(model: model),
+                  const SizedBox(height: 24),
                 ],
               ),
             );
           },
         ),
       ),
-    );
-  }
-
-  Widget _buildBillRow(String label, double amount, {bool isFree = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12.5, color: Colors.grey),
-        ),
-        Text(
-          isFree ? 'FREE' : '₹${amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w600,
-            color: isFree ? Colors.green : Colors.black87,
-          ),
-        ),
-      ],
     );
   }
 }
