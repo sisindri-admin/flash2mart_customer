@@ -1,10 +1,14 @@
-import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../providers/cart_provider.dart';
 
-class ProductDetailScreen extends StatelessWidget {
+import '../providers/cart_provider.dart';
+import '../widgets/product_detail/product_image_carousel_widget.dart';
+import '../widgets/product_detail/product_price_and_highlights_widgets.dart';
+import '../widgets/product_detail/product_reviews_and_similar_widgets.dart';
+import 'checkout_screen.dart';
+
+class ProductDetailScreen extends StatefulWidget {
   final Map<String, dynamic> productData;
   final String productId;
 
@@ -14,196 +18,203 @@ class ProductDetailScreen extends StatelessWidget {
     required this.productId,
   });
 
-  Widget _buildProductImage(String imageStr) {
-    if (imageStr.trim().isEmpty) {
-      return Icon(Icons.shopping_bag_outlined, size: 100, color: Colors.green.shade200);
-    }
+  @override
+  State<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
 
-    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
-      try {
-        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
-        final bytes = base64Decode(cleanBase64.trim());
-        return Image.memory(bytes, fit: BoxFit.contain);
-      } catch (e) {
-        return Icon(Icons.shopping_bag_outlined, size: 100, color: Colors.green.shade200);
-      }
-    }
+class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  bool _isWishlisted = false;
+  int _selectedPackMultiplier = 1;
+  String _deliveryLocation = 'Nellore - 524004';
 
-    return Image.network(
-      imageStr,
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, size: 100, color: Colors.green.shade200),
+  void _toggleWishlist(String productName) {
+    setState(() => _isWishlisted = !_isWishlisted);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isWishlisted
+              ? '$productName added to your Wishlist ♥'
+              : 'Removed from Wishlist',
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor:
+            _isWishlisted ? const Color(0xFF00875A) : const Color(0xFF334155),
+      ),
     );
   }
 
-  // Store Image పై Click చేసినప్పుడు ఫుల్ స్క్రీన్‌లో చూపించే Dialog
-  void _showFullStoreImage(BuildContext context, String imageStr, String storeName) {
-    if (imageStr.trim().isEmpty) return;
+  void _shareProduct(String name, double price, String unit) {
+    final String shareText =
+        'Check out $name ($unit) at just ₹${price.toInt()} on Flash2Mart (15 Mins Superfast Delivery in Nellore)!';
+    Clipboard.setData(ClipboardData(text: shareText));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Product share details copied! Ready to paste on WhatsApp.'),
+        backgroundColor: Color(0xFF00875A),
+      ),
+    );
+  }
+
+  void _changeDeliveryLocationDialog() {
+    final TextEditingController locCtrl =
+        TextEditingController(text: _deliveryLocation);
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          alignment: Alignment.topRight,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    storeName,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildImageWidget(imageStr, height: 300, fit: BoxFit.contain),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.black, size: 28),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Change Delivery Pincode / Area',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
+        content: TextField(
+          controller: locCtrl,
+          decoration: InputDecoration(
+            hintText: 'e.g. Vedayapalem, Nellore - 524004',
+            prefixIcon: const Icon(
+              Icons.location_on_rounded,
+              color: Color(0xFF00875A),
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00875A),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              if (locCtrl.text.trim().isNotEmpty) {
+                setState(() => _deliveryLocation = locCtrl.text.trim());
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Update'),
+          ),
+        ],
       ),
     );
-  }
-
-  // Common Helper function to render Base64 / Network Store Images
-  Widget _buildImageWidget(String imageStr, {double width = double.infinity, double height = 60, BoxFit fit = BoxFit.cover}) {
-    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
-      try {
-        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
-        final bytes = base64Decode(cleanBase64.trim());
-        return Image.memory(
-          bytes,
-          width: width,
-          height: height,
-          fit: fit,
-          errorBuilder: (_, __, ___) => const Icon(Icons.storefront, color: Color(0xFF00875A), size: 36),
-        );
-      } catch (e) {
-        return const Icon(Icons.storefront, color: Color(0xFF00875A), size: 36);
-      }
-    }
-
-    return Image.network(
-      imageStr,
-      width: width,
-      height: height,
-      fit: fit,
-      errorBuilder: (_, __, ___) => const Icon(Icons.storefront, color: Color(0xFF00875A), size: 36),
-    );
-  }
-
-  Widget _buildStoreImage(BuildContext context, String imageStr, String storeName) {
-    if (imageStr.trim().isEmpty) {
-      return Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: const Color(0xFF00875A).withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.storefront, color: Color(0xFF00875A), size: 32),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () => _showFullStoreImage(context, imageStr, storeName),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 60,
-          height: 60,
-          color: Colors.white,
-          child: _buildImageWidget(imageStr, width: 60, height: 60, fit: BoxFit.cover),
-        ),
-      ),
-    );
-  }
-
-  Future<Map<String, String>> _fetchMerchantDetails(String merchantId) async {
-    if (merchantId.isEmpty) {
-      return {
-        'storeName': 'Flash2Mart Partner Store',
-        'location': 'Local Store, Nellore',
-        'ownerName': 'Verified Partner',
-        'storeImageBase64': '',
-      };
-    }
-
-    try {
-      final doc = await FirebaseFirestore.instance.collection('merchants').doc(merchantId).get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        return {
-          'storeName': (data['storeName'] ?? 'Flash2Mart Store').toString(),
-          'location': (data['location'] ?? 'Nellore, Andhra Pradesh').toString(),
-          'ownerName': (data['ownerName'] ?? 'Verified Merchant').toString(),
-          'storeImageBase64': (data['storeImageBase64'] ?? '').toString(),
-        };
-      }
-    } catch (e) {
-      debugPrint("Error fetching merchant data: $e");
-    }
-
-    return {
-      'storeName': 'Flash2Mart Partner Store',
-      'location': 'Nellore, Andhra Pradesh',
-      'ownerName': 'Verified Merchant',
-      'storeImageBase64': '',
-    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final String name = productData['name'] ?? productData['title'] ?? 'Product Details';
-    final double price = ((productData['price'] ?? 0) as num).toDouble();
-    final double marketPrice = ((productData['marketPrice'] ?? price) as num).toDouble();
-    final String unit = productData['unit'] ?? productData['weight'] ?? '1 unit';
-    final String imageUrl = productData['imageUrl'] ?? productData['imageBase64'] ?? productData['image'] ?? '';
-    final String description = productData['description'] ?? 'Fresh and quality grocery products delivered in minutes.';
-    final String category = productData['category'] ?? 'Grocery / Supermarket';
-    final String merchantId = productData['merchantId'] ?? '';
-    final int stock = ((productData['stock'] ?? 1) as num).toInt();
+    final Map<String, dynamic> data = widget.productData;
+    final String name =
+        (data['name'] ?? data['title'] ?? 'Product Details').toString();
+    final double basePrice = ((data['price'] ?? 0) as num).toDouble();
+    final double baseMarketPrice =
+        ((data['marketPrice'] ?? basePrice) as num).toDouble();
+    final String unit =
+        (data['unit'] ?? data['weight'] ?? '1 unit').toString();
+    final String imageUrl = (data['imageUrl'] ??
+            data['imageBase64'] ??
+            data['image'] ??
+            '')
+        .toString();
+    final String description = (data['description'] ??
+            'Fresh and quality grocery products delivered in 15 minutes.')
+        .toString();
+    final String category =
+        (data['category'] ?? 'Grocery / Supermarket').toString();
+    final String merchantId = (data['merchantId'] ?? '').toString();
+    final int stock = ((data['stock'] ?? 1) as num).toInt();
     final bool isOutOfStock = stock <= 0;
 
-    int discountPercent = 0;
-    if (marketPrice > price && marketPrice > 0) {
-      discountPercent = (((marketPrice - price) / marketPrice) * 100).round();
+    final List<String> extraImages = [];
+    if (data['images'] is List) {
+      for (final item in data['images'] as List) {
+        if (item != null && item.toString().trim().isNotEmpty) {
+          extraImages.add(item.toString().trim());
+        }
+      }
     }
-    final int savingsAmount = (marketPrice - price).round();
+
+    int discountPercent = 0;
+    if (baseMarketPrice > basePrice && baseMarketPrice > 0) {
+      discountPercent =
+          (((baseMarketPrice - basePrice) / baseMarketPrice) * 100).round();
+    }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF1F5F9),
+      // TOP APP BAR WITH SEARCH, WISHLIST & LIVE CART BADGE (Screenshot 1)
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
+        elevation: 0.5,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF0F172A),
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           name,
-          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 15.5,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: Colors.black),
-            onPressed: () {},
+            icon: const Icon(Icons.search_rounded, color: Color(0xFF334155)),
+            tooltip: 'Search Products',
+            onPressed: () => Navigator.pop(context),
           ),
+          IconButton(
+            icon: Icon(
+              _isWishlisted
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              color: _isWishlisted
+                  ? const Color(0xFFDC2626)
+                  : const Color(0xFF334155),
+            ),
+            tooltip: 'Wishlist',
+            onPressed: () => _toggleWishlist(name),
+          ),
+          Selector<CartProvider, int>(
+            selector: (context, cart) => cart.totalQuantity,
+            builder: (context, totalQty, child) {
+              return IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          CheckoutScreen(selectedAddress: _deliveryLocation),
+                    ),
+                  );
+                },
+                icon: Badge(
+                  isLabelVisible: totalQty > 0,
+                  backgroundColor: const Color(0xFF00875A),
+                  label: Text(
+                    '$totalQty',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_cart_outlined,
+                    color: Color(0xFF334155),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 6),
         ],
       ),
       body: Column(
@@ -214,321 +225,140 @@ class ProductDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // PRODUCT IMAGE SHOWCASE
-                  Container(
-                    height: 260,
-                    width: double.infinity,
-                    color: Colors.grey.shade50,
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: Hero(
-                        tag: 'product_image_$productId',
-                        child: _buildProductImage(imageUrl),
-                      ),
-                    ),
+                  // 1. MULTI-SLIDE IMAGE CAROUSEL + LOCATION BAR + LIVE COUNTDOWN
+                  ProductImageCarouselWidget(
+                    productId: widget.productId,
+                    productName: name,
+                    primaryImageUrl: imageUrl,
+                    extraImages: extraImages,
+                    unit: unit,
+                    discountPercent: discountPercent,
+                    deliveryLocation: _deliveryLocation,
+                    onChangeLocationTap: _changeDeliveryLocationDialog,
                   ),
-                  const SizedBox(height: 16),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // DELIVERY TIME & DISCOUNT BADGE
-                        Row(
-                          children: [
-                            const Icon(Icons.bolt, color: Color(0xFF00875A), size: 16),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Delivery in 15 MINS',
-                              style: TextStyle(
-                                color: Color(0xFF00875A),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (discountPercent > 0 && !isOutOfStock)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2563EB),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '$discountPercent% OFF',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
+                  // 2. PRICE, MALL BADGE, SPECIAL OFFER, SIZE SELECTOR, SELLER & HIGHLIGHTS
+                  ProductPriceAndHighlightsSection(
+                    productId: widget.productId,
+                    name: name,
+                    price: basePrice,
+                    marketPrice: baseMarketPrice,
+                    unit: unit,
+                    category: category,
+                    description: description,
+                    merchantId: merchantId,
+                    stock: stock,
+                    isWishlisted: _isWishlisted,
+                    onWishlistToggle: () => _toggleWishlist(name),
+                    onShareTap: () => _shareProduct(name, basePrice, unit),
+                    selectedPackMultiplier: _selectedPackMultiplier,
+                    onPackMultiplierChanged: (mult) {
+                      setState(() => _selectedPackMultiplier = mult);
+                    },
+                  ),
 
-                        // PRODUCT NAME & UNIT
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          unit,
-                          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // PRICING ROW
-                        Row(
-                          children: [
-                            Text(
-                              '₹${price.toInt()}',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (marketPrice > price) ...[
-                              Text(
-                                '₹${marketPrice.toInt()}',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey.shade500,
-                                  decoration: TextDecoration.lineThrough,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            if (savingsAmount > 0 && !isOutOfStock)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDCFCE7),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Save ₹$savingsAmount',
-                                  style: const TextStyle(
-                                    color: Color(0xFF15803D),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        const Divider(),
-                        const SizedBox(height: 8),
-
-                        // PRODUCT INFORMATION SECTION
-                        const Text(
-                          'Product Information',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        FutureBuilder<Map<String, String>>(
-                          future: _fetchMerchantDetails(merchantId),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.0),
-                                child: LinearProgressIndicator(color: Color(0xFF00875A)),
-                              );
-                            }
-
-                            final storeName = snapshot.data?['storeName'] ?? 'Flash2Mart Store';
-                            final location = snapshot.data?['location'] ?? 'Nellore, AP';
-                            final ownerName = snapshot.data?['ownerName'] ?? 'Merchant';
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildInfoRow('Merchant Shop Name', storeName),
-                                _buildInfoRow('Category', category),
-                                _buildInfoRow('Sold By', ownerName),
-                                _buildInfoRow('Address', location),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ENHANCED VERIFIED SELLER CARD (Increased Size & Click to View Image)
-                        FutureBuilder<Map<String, String>>(
-                          future: _fetchMerchantDetails(merchantId),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const SizedBox.shrink();
-                            final storeImgStr = snapshot.data!['storeImageBase64'] ?? '';
-                            final storeName = snapshot.data!['storeName'] ?? 'Store';
-
-                            return Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00875A).withOpacity(0.06),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFF00875A).withOpacity(0.2)),
-                              ),
-                              child: Row(
-                                children: [
-                                  _buildStoreImage(context, storeImgStr, storeName),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          storeName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                            color: Color(0xFF00875A),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          'Verified Seller • 100% Fresh Guarantee',
-                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                                        ),
-                                        if (storeImgStr.isNotEmpty)
-                                          const Padding(
-                                            padding: EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              'Tap image to view full photo',
-                                              style: TextStyle(fontSize: 10, color: Colors.grey),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ABOUT / DESCRIPTION
-                        const Text(
-                          'About Product',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          description.isNotEmpty
-                              ? description
-                              : 'Fresh and quality grocery products delivered in minutes right to your doorstep.',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, height: 1.4),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                  // 3. RATINGS BREAKDOWN, REAL PHOTOS, REVIEWS, TRUST STRIP & PEOPLE ALSO VIEWED
+                  ProductReviewsAndSimilarSection(
+                    productId: widget.productId,
+                    productName: name,
+                    category: category,
+                    primaryImageUrl: imageUrl,
+                    deliveryLocation: _deliveryLocation,
+                    onChangeLocationTap: _changeDeliveryLocationDialog,
                   ),
                 ],
               ),
             ),
           ),
 
-          // STICKY BOTTOM ADD TO CART BAR
+          // 4. STICKY DUAL-BUTTON BOTTOM BAR ([Add to Cart] + [Buy Now]) (Screenshots 1-4)
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Color(0x14000000),
                   blurRadius: 10,
-                  offset: const Offset(0, -4),
+                  offset: Offset(0, -3),
                 ),
               ],
             ),
-            child: Consumer<CartProvider>(
-              builder: (context, cart, child) {
-                final int currentQty = cart.items[productId]?.quantity ?? 0;
+            child: SafeArea(
+              top: false,
+              child: Consumer<CartProvider>(
+                builder: (context, cart, child) {
+                  final int currentQty =
+                      cart.items[widget.productId]?.quantity ?? 0;
 
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          unit,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                        Text(
-                          '₹${price.toInt()}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
+                  if (isOutOfStock) {
+                    return Container(
+                      width: double.infinity,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'CURRENTLY OUT OF STOCK',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
                           ),
                         ),
-                      ],
-                    ),
-                    isOutOfStock
-                        ? Container(
-                            height: 46,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'OUT OF STOCK',
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          )
-                        : currentQty == 0
+                      ),
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      // Left Button: Outlined Add to Cart OR Quantity Stepper
+                      Expanded(
+                        child: currentQty == 0
                             ? SizedBox(
                                 height: 46,
-                                width: 140,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00875A),
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF00875A),
+                                    side: const BorderSide(
+                                      color: Color(0xFF00875A),
+                                      width: 1.6,
+                                    ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
                                   onPressed: () {
-                                    cart.addItem(
-                                      id: productId,
-                                      name: name,
-                                      price: price,
-                                      unit: unit,
-                                      imageUrl: imageUrl,
+                                    for (int i = 0;
+                                        i < _selectedPackMultiplier;
+                                        i++) {
+                                      cart.addItem(
+                                        id: widget.productId,
+                                        name: name,
+                                        price: basePrice,
+                                        unit: unit,
+                                        imageUrl: imageUrl,
+                                      );
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('$name added to Cart!'),
+                                        duration: const Duration(seconds: 1),
+                                        backgroundColor: const Color(0xFF00875A),
+                                      ),
                                     );
                                   },
-                                  child: const Text(
-                                    'ADD TO CART',
+                                  icon: const Icon(
+                                    Icons.shopping_cart_outlined,
+                                    size: 19,
+                                  ),
+                                  label: const Text(
+                                    'Add to Cart',
                                     style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
@@ -536,29 +366,42 @@ class ProductDetailScreen extends StatelessWidget {
                             : Container(
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF00875A),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFF00875A),
+                                    width: 1.6,
+                                  ),
                                 ),
                                 child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceEvenly,
                                   children: [
                                     IconButton(
-                                      icon: const Icon(Icons.remove, color: Colors.white),
-                                      onPressed: () => cart.removeSingleItem(productId),
+                                      icon: const Icon(
+                                        Icons.remove_rounded,
+                                        color: Color(0xFF00875A),
+                                      ),
+                                      onPressed: () => cart
+                                          .removeSingleItem(widget.productId),
                                     ),
                                     Text(
-                                      '$currentQty',
+                                      '$currentQty in Cart',
                                       style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                        color: Color(0xFF00875A),
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13.5,
                                       ),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.add, color: Colors.white),
+                                      icon: const Icon(
+                                        Icons.add_rounded,
+                                        color: Color(0xFF00875A),
+                                      ),
                                       onPressed: () => cart.addItem(
-                                        id: productId,
+                                        id: widget.productId,
                                         name: name,
-                                        price: price,
+                                        price: basePrice,
                                         unit: unit,
                                         imageUrl: imageUrl,
                                       ),
@@ -566,36 +409,62 @@ class ProductDetailScreen extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+                      ),
+                      const SizedBox(width: 12),
 
-  Widget _buildInfoRow(String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              title,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: Color(0xFF1E293B),
+                      // Right Button: Solid Buy Now (Adds & Navigates to Checkout)
+                      Expanded(
+                        child: SizedBox(
+                          height: 46,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00875A),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: () {
+                              if (currentQty == 0) {
+                                for (int i = 0;
+                                    i < _selectedPackMultiplier;
+                                    i++) {
+                                  cart.addItem(
+                                    id: widget.productId,
+                                    name: name,
+                                    price: basePrice,
+                                    unit: unit,
+                                    imageUrl: imageUrl,
+                                  );
+                                }
+                              }
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckoutScreen(
+                                    selectedAddress: _deliveryLocation,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.double_arrow_rounded,
+                              size: 19,
+                            ),
+                            label: const Text(
+                              'Buy Now',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
