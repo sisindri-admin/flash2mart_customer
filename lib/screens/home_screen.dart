@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
@@ -8,12 +7,15 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/custom_bottom_navbar.dart';
-import '../widgets/product_card.dart';
+import '../widgets/home/active_order_floating_banner.dart';
+import '../widgets/home/home_product_sections.dart';
+import '../widgets/home/home_trust_and_promo_widgets.dart';
 import '../widgets/offer_slider_banner.dart';
+import '../widgets/product_card.dart';
 import 'checkout_screen.dart';
+import 'help_screen.dart';
 import 'my_orders_screen.dart';
 import 'profile_screen.dart';
-import 'help_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,25 +27,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final ValueNotifier<bool> _showCartPopupNotifier = ValueNotifier<bool>(false);
-  Timer? _cartTimer;
-
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
 
   String _searchQuery = '';
   String _selectedCategory = 'All';
+  String _activeQuickFilter = 'all'; // all, offers, under99, instock, price_asc
 
-  String _currentAddress = "Fetch Live Location...";
+  String _currentAddress = 'Fetch Live Location...';
   bool _isLoadingLocation = false;
-
-  final List<String> _categories = [
-    'All',
-    'Grocery / Supermarket',
-    'Electronics Store',
-    'Vegetables & Fruits',
-    'Medicines & Pharmacy',
-  ];
 
   @override
   void initState() {
@@ -53,22 +45,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _cartTimer?.cancel();
-    _showCartPopupNotifier.dispose();
     _searchController.dispose();
     _addressEditController.dispose();
     super.dispose();
-  }
-
-  void _triggerCartPopup() {
-    _cartTimer?.cancel();
-    _showCartPopupNotifier.value = true;
-
-    _cartTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        _showCartPopupNotifier.value = false;
-      }
-    });
   }
 
   Future<void> _fetchLiveLocation() async {
@@ -78,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!serviceEnabled) {
         if (mounted) {
           setState(() {
-            _currentAddress = "GPS Off - Select Manually";
+            _currentAddress = 'GPS Off - Select Manually';
             _isLoadingLocation = false;
           });
         }
@@ -91,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (permission == LocationPermission.denied) {
           if (mounted) {
             setState(() {
-              _currentAddress = "Permission Denied";
+              _currentAddress = 'Permission Denied';
               _isLoadingLocation = false;
             });
           }
@@ -102,7 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
           setState(() {
-            _currentAddress = "Enable Location in Settings";
+            _currentAddress = 'Enable Location in Settings';
             _isLoadingLocation = false;
           });
         }
@@ -110,7 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       List<Placemark> placemarks = await placemarkFromCoordinates(
@@ -137,18 +118,19 @@ class _HomeScreenState extends State<HomeScreen> {
           addressParts.add(place.postalCode!);
         }
 
-        final fullAddress = addressParts.join(', ');
+        final String fullAddress = addressParts.join(', ');
 
         setState(() {
-          _currentAddress = fullAddress.isNotEmpty ? fullAddress : "Location Detected";
+          _currentAddress =
+              fullAddress.isNotEmpty ? fullAddress : 'Location Detected';
           _addressEditController.text = _currentAddress;
           _isLoadingLocation = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _currentAddress = "Vedayapalem, Main Road, Nellore - 524004";
+          _currentAddress = 'Vedayapalem, Main Road, Nellore - 524004';
           _addressEditController.text = _currentAddress;
           _isLoadingLocation = false;
         });
@@ -181,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Delivery Location',
+                    'Select Delivery Location',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   IconButton(
@@ -196,10 +178,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.pop(context);
                   _fetchLiveLocation();
                 },
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00875A).withOpacity(0.08),
+                    color: const Color(0x1400875A),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Row(
@@ -210,26 +196,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Fetch Current GPS Location',
+                            'Use Current GPS Location',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF00875A),
                             ),
                           ),
                           Text(
-                            'Using satellite precise location',
+                            'Using satellite precise location for 15-min delivery',
                             style: TextStyle(fontSize: 11, color: Colors.grey),
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               const Text(
-                'Edit / Customize Address:',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey),
+                'Edit / Customize Complete Address:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: Colors.grey,
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -237,13 +227,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 2,
                 decoration: InputDecoration(
                   hintText: 'Enter Door No, Street Name, Area...',
-                  prefixIcon: const Icon(Icons.edit_location_alt_outlined, color: Color(0xFF00875A)),
+                  prefixIcon: const Icon(
+                    Icons.edit_location_alt_outlined,
+                    color: Color(0xFF00875A),
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF00875A), width: 2),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF00875A),
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -254,15 +250,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     avatar: const Icon(Icons.home, size: 16, color: Colors.blue),
                     label: const Text('Home'),
                     onPressed: () {
-                      _addressEditController.text = "D.No: 12-3-45, Home Street, Vedayapalem, Nellore";
+                      _addressEditController.text =
+                          'D.No: 12-3-45, Home Street, Vedayapalem, Nellore';
                     },
                   ),
                   const SizedBox(width: 8),
                   ActionChip(
-                    avatar: const Icon(Icons.work, size: 16, color: Colors.orange),
+                    avatar: const Icon(
+                      Icons.work,
+                      size: 16,
+                      color: Colors.orange,
+                    ),
                     label: const Text('Work'),
                     onPressed: () {
-                      _addressEditController.text = "Plot 402, Tech Hub, Magunta Layout, Nellore";
+                      _addressEditController.text =
+                          'Plot 402, Tech Hub, Magunta Layout, Nellore';
                     },
                   ),
                 ],
@@ -287,8 +289,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.pop(context);
                   },
                   child: const Text(
-                    'UPDATE LOCATION',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    'CONFIRM LOCATION',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -305,27 +310,283 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildAttractiveHeader(),
           Expanded(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 8),
-                      const OfferSliderBanner(),
-                      _buildCategoriesList(),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  sliver: _buildProductsSliverGrid(),
-                ),
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 20),
-                ),
-              ],
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('products').snapshots(),
+              builder: (context, snapshot) {
+                final bool isLoading =
+                    snapshot.connectionState == ConnectionState.waiting;
+                final List<QueryDocumentSnapshot> allDocs =
+                    snapshot.data?.docs ?? [];
+
+                // Apply Search, Category, and Quick Filter
+                final List<QueryDocumentSnapshot> filteredDocs = allDocs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final String name =
+                      (data['name'] ?? data['title'] ?? '').toString().toLowerCase();
+                  final String category =
+                      (data['category'] ?? '').toString().toLowerCase();
+                  final double price = ((data['price'] ?? 0) as num).toDouble();
+                  final double marketPrice =
+                      ((data['marketPrice'] ?? price) as num).toDouble();
+                  final int stock = ((data['stock'] ?? 1) as num).toInt();
+
+                  if (_searchQuery.isNotEmpty && !name.contains(_searchQuery)) {
+                    return false;
+                  }
+                  if (_selectedCategory != 'All' &&
+                      !category.contains(_selectedCategory.toLowerCase())) {
+                    return false;
+                  }
+                  if (_activeQuickFilter == 'offers' && !(marketPrice > price)) {
+                    return false;
+                  }
+                  if (_activeQuickFilter == 'under99' && !(price <= 99)) {
+                    return false;
+                  }
+                  if (_activeQuickFilter == 'instock' && !(stock > 0)) {
+                    return false;
+                  }
+                  return true;
+                }).toList();
+
+                if (_activeQuickFilter == 'price_asc') {
+                  filteredDocs.sort((a, b) {
+                    final aData = a.data() as Map<String, dynamic>;
+                    final bData = b.data() as Map<String, dynamic>;
+                    final double aPrice = ((aData['price'] ?? 0) as num).toDouble();
+                    final double bPrice = ((bData['price'] ?? 0) as num).toDouble();
+                    return aPrice.compareTo(bPrice);
+                  });
+                }
+
+                final bool showCuratedCarousels = _searchQuery.isEmpty &&
+                    _selectedCategory == 'All' &&
+                    _activeQuickFilter == 'all' &&
+                    allDocs.isNotEmpty;
+
+                return CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 8),
+                          const OfferSliderBanner(),
+                          const HomeTrustBadgeStrip(),
+                          HomeCategoryGridSection(
+                            selectedCategory: _selectedCategory,
+                            onCategorySelected: (cat) {
+                              setState(() => _selectedCategory = cat);
+                            },
+                          ),
+                          if (showCuratedCarousels)
+                            HomeProductSections(
+                              allDocs: allDocs,
+                              onCartUpdated: () {},
+                            ),
+                          const SizedBox(height: 10),
+                          HomeQuickFilterBar(
+                            activeFilter: _activeQuickFilter,
+                            onFilterSelected: (filterId) {
+                              setState(() => _activeQuickFilter = filterId);
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _selectedCategory == 'All'
+                                      ? 'All Fresh Products'
+                                      : _selectedCategory,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE2E8F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${filteredDocs.length} Items',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF334155),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isLoading)
+                      const SliverPadding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        sliver: SliverToBoxAdapter(
+                          child: HomeProductSkeletonGrid(),
+                        ),
+                      )
+                    else if (snapshot.hasError)
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Text(
+                              'Error: ${snapshot.error}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (filteredDocs.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 36,
+                          ),
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.search_off_rounded,
+                                size: 48,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'No matching products found',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF334155),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Try clearing search or switching categories',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                    _selectedCategory = 'All';
+                                    _activeQuickFilter = 'all';
+                                  });
+                                },
+                                icon: const Icon(Icons.refresh_rounded, size: 16),
+                                label: const Text('Reset All Filters'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        sliver: SliverGrid(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final doc = filteredDocs[index];
+                              final data = doc.data() as Map<String, dynamic>;
+
+                              final String productId = doc.id;
+                              final String productName =
+                                  (data['name'] ?? data['title'] ?? 'Product')
+                                      .toString();
+                              final double productPrice =
+                                  ((data['price'] ?? 0) as num).toDouble();
+                              final double marketPrice =
+                                  ((data['marketPrice'] ?? productPrice) as num)
+                                      .toDouble();
+                              final String productUnit =
+                                  (data['unit'] ?? data['weight'] ?? '1 unit')
+                                      .toString();
+                              final String imageUrl = (data['imageBase64'] ??
+                                      data['imageUrl'] ??
+                                      data['image'] ??
+                                      '')
+                                  .toString();
+                              final int productStock =
+                                  ((data['stock'] ?? 1) as num).toInt();
+
+                              final String merchantId =
+                                  (data['merchantId'] ?? '').toString();
+                              final String category = (data['category'] ??
+                                      'Grocery / Supermarket')
+                                  .toString();
+                              final String description =
+                                  (data['description'] ?? '').toString();
+
+                              return Selector<CartProvider, int>(
+                                selector: (context, cart) =>
+                                    cart.items[productId]?.quantity ?? 0,
+                                builder: (context, currentQty, child) {
+                                  return ProductCard(
+                                    key: ValueKey('product_$productId'),
+                                    id: productId,
+                                    name: productName,
+                                    price: productPrice,
+                                    marketPrice: marketPrice,
+                                    unit: productUnit,
+                                    imageUrl: imageUrl,
+                                    stock: productStock,
+                                    merchantId: merchantId,
+                                    category: category,
+                                    description: description,
+                                    quantityInCart: currentQty,
+                                    onAdd: () {
+                                      context.read<CartProvider>().addItem(
+                                            id: productId,
+                                            name: productName,
+                                            price: productPrice,
+                                            unit: productUnit,
+                                            imageUrl: imageUrl,
+                                          );
+                                    },
+                                    onRemove: () {
+                                      context
+                                          .read<CartProvider>()
+                                          .removeSingleItem(productId);
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                            childCount: filteredDocs.length,
+                          ),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.63,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                        ),
+                      ),
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: 24),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -346,7 +607,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _buildHelpBody(),
     ];
 
-    final int safeIndex = (_currentIndex < pages.length && _currentIndex >= 0) ? _currentIndex : 0;
+    final int safeIndex =
+        (_currentIndex < pages.length && _currentIndex >= 0) ? _currentIndex : 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
@@ -357,34 +619,31 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: _showCartPopupNotifier,
-            builder: (context, showPopup, child) {
-              return Selector<CartProvider, int>(
-                selector: (context, cart) => cart.totalQuantity,
-                builder: (context, totalQuantity, child) {
-                  if (totalQuantity <= 0 || !showPopup) return const SizedBox.shrink();
+          // Live Active Order Tracker Pill (Swiggy/Zomato Style) on Home tab
+          if (safeIndex == 0) const ActiveOrderFloatingBanner(),
 
-                  final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                  return AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: showPopup ? 1.0 : 0.0,
-                    child: BottomOrderBar(
-                      totalQuantity: totalQuantity,
-                      totalAmount: cartProvider.totalAmount,
-                      selectedAddress: _currentAddress,
-                      onViewCartPressed: () {
-                        setState(() {
-                          _currentIndex = 2;
-                        });
-                        _showCartPopupNotifier.value = false;
-                      },
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+          // Persistent Sticky Cart Bar whenever items are in cart (on Home tab)
+          if (safeIndex == 0)
+            Selector<CartProvider, int>(
+              selector: (context, cart) => cart.totalQuantity,
+              builder: (context, totalQuantity, child) {
+                if (totalQuantity <= 0) return const SizedBox.shrink();
+
+                final cartProvider =
+                    Provider.of<CartProvider>(context, listen: false);
+                return BottomOrderBar(
+                  totalQuantity: totalQuantity,
+                  totalAmount: cartProvider.totalAmount,
+                  selectedAddress: _currentAddress,
+                  onViewCartPressed: () {
+                    setState(() {
+                      _currentIndex = 2;
+                    });
+                  },
+                );
+              },
+            ),
+
           CustomBottomNavBar(
             currentIndex: safeIndex,
             onTap: (index) {
@@ -402,10 +661,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
-        color: Color(0xFF00875A),
+        gradient: LinearGradient(
+          colors: [Color(0xFF00875A), Color(0xFF047857)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(20),
-          bottomRight: Radius.circular(20),
+          bottomLeft: Radius.circular(22),
+          bottomRight: Radius.circular(22),
         ),
       ),
       child: Column(
@@ -425,12 +688,15 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.white,
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.4,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.amber.shade400,
                             borderRadius: BorderRadius.circular(12),
@@ -442,7 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 '15 MINS',
                                 style: TextStyle(
                                   fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w900,
                                   color: Colors.black,
                                 ),
                               ),
@@ -456,11 +722,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: _showLocationBottomSheet,
                       child: Row(
                         children: [
-                          const Icon(Icons.location_on, color: Colors.white70, size: 14),
+                          const Icon(
+                            Icons.location_on,
+                            color: Colors.white70,
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              _isLoadingLocation ? "Detecting location..." : _currentAddress,
+                              _isLoadingLocation
+                                  ? 'Detecting location...'
+                                  : _currentAddress,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -469,7 +741,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 16),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
                         ],
                       ),
                     ),
@@ -489,11 +765,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
                 },
-                child: CircleAvatar(
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  child: const Icon(Icons.person_outline, color: Colors.white),
+                child: const CircleAvatar(
+                  backgroundColor: Color(0x33FFFFFF),
+                  child: Icon(Icons.person_outline, color: Colors.white),
                 ),
-              )
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -502,180 +778,45 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
+              boxShadow: const [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Color(0x14000000),
                   blurRadius: 8,
-                  offset: const Offset(0, 3),
+                  offset: Offset(0, 3),
                 ),
               ],
             ),
             child: TextField(
               controller: _searchController,
-              onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-              decoration: const InputDecoration(
-                hintText: 'Search milk, rice, vegetables...',
-                hintStyle: TextStyle(color: Colors.grey, fontSize: 13),
-                prefixIcon: Icon(Icons.search, color: Color(0xFF00875A)),
+              onChanged: (v) =>
+                  setState(() => _searchQuery = v.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: 'Search milk, fresh vegetables, rice, snacks...',
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Color(0xFF00875A),
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.cancel_rounded,
+                          size: 18,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildCategoriesList() {
-    return Container(
-      height: 44,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListView.builder(
-        key: const PageStorageKey('categories_list'),
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final cat = _categories[index];
-          final isSelected = _selectedCategory == cat;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(
-                cat,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isSelected ? Colors.white : Colors.grey.shade800,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                ),
-              ),
-              selected: isSelected,
-              selectedColor: const Color(0xFF00875A),
-              backgroundColor: Colors.white,
-              side: BorderSide(
-                color: isSelected ? const Color(0xFF00875A) : Colors.grey.shade300,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              onSelected: (val) => setState(() => _selectedCategory = cat),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProductsSliverGrid() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('products').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(32.0),
-                child: CircularProgressIndicator(color: Color(0xFF00875A)),
-              ),
-            ),
-          );
-        }
-
-        if (snapshot.hasError) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
-            ),
-          );
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(child: Text('ఉత్పత్తులు అందుబాటులో లేవు.')),
-          );
-        }
-
-        final docs = snapshot.data!.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final name = (data['name'] ?? data['title'] ?? '').toString().toLowerCase();
-
-          if (_searchQuery.isNotEmpty && !name.contains(_searchQuery)) return false;
-
-          if (_selectedCategory != 'All') {
-            final cat = (data['category'] ?? '').toString().toLowerCase();
-            if (!cat.contains(_selectedCategory.toLowerCase())) return false;
-          }
-          return true;
-        }).toList();
-
-        if (docs.isEmpty) {
-          return const SliverToBoxAdapter(
-            child: Center(child: Text('ఫలితాలు ఏవీ దొరకలేదు.')),
-          );
-        }
-
-        return SliverGrid(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final doc = docs[index];
-              final data = doc.data() as Map<String, dynamic>;
-
-              final productId = doc.id;
-              final productName = data['name'] ?? data['title'] ?? 'Product';
-              final productPrice = ((data['price'] ?? 0) as num).toDouble();
-              final double marketPrice = ((data['marketPrice'] ?? productPrice) as num).toDouble();
-              final productUnit = data['unit'] ?? data['weight'] ?? '1 unit';
-              final imageUrl = data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '';
-              final int productStock = ((data['stock'] ?? 1) as num).toInt();
-
-              // Merchant/Category details passed directly from Firestore product doc
-              final String merchantId = data['merchantId'] ?? '';
-              final String category = data['category'] ?? 'Grocery / Supermarket';
-              final String description = data['description'] ?? '';
-
-              return Selector<CartProvider, int>(
-                selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
-                builder: (context, currentQty, child) {
-                  return ProductCard(
-                    key: ValueKey('product_$productId'),
-                    id: productId,
-                    name: productName,
-                    price: productPrice,
-                    marketPrice: marketPrice,
-                    unit: productUnit,
-                    imageUrl: imageUrl,
-                    stock: productStock,
-                    merchantId: merchantId,
-                    category: category,
-                    description: description,
-                    quantityInCart: currentQty,
-                    onAdd: () {
-                      context.read<CartProvider>().addItem(
-                            id: productId,
-                            name: productName,
-                            price: productPrice,
-                            unit: productUnit,
-                            imageUrl: imageUrl,
-                          );
-                      _triggerCartPopup();
-                    },
-                    onRemove: () {
-                      context.read<CartProvider>().removeSingleItem(productId);
-                      _triggerCartPopup();
-                    },
-                  );
-                },
-              );
-            },
-            childCount: docs.length,
-          ),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.63,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-        );
-      },
     );
   }
 }

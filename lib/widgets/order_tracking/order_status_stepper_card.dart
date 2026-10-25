@@ -43,7 +43,6 @@ class OrderStatusStepperCard extends StatelessWidget {
             ? const Color(0xFFBBF7D0)
             : const Color(0xFFBFDBFE);
 
-    // Show Delivery OTP when partner is assigned or order is out for delivery (and not yet delivered/cancelled)
     final bool showOtpBanner = !isCancelled &&
         !isDelivered &&
         (model.currentStepIndex >= 2 || model.deliveryPartnerId.isNotEmpty);
@@ -59,7 +58,6 @@ class OrderStatusStepperCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Store Name & Cancel Action Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -103,15 +101,13 @@ class OrderStatusStepperCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-
-          // Main Status Headline
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.12),
+                  color: primaryColor.withAlpha(30),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -161,14 +157,10 @@ class OrderStatusStepperCard extends StatelessWidget {
               ),
             ],
           ),
-
-          // 5-Step Progress Bar (Hidden if Cancelled)
           if (!isCancelled) ...[
             const SizedBox(height: 16),
             _buildHorizontalStepper(primaryColor),
           ],
-
-          // 4-Digit Delivery OTP Card
           if (showOtpBanner) ...[
             const SizedBox(height: 14),
             Container(

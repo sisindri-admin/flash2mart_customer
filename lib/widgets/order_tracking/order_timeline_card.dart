@@ -54,9 +54,9 @@ class OrderTimelineCard extends StatelessWidget {
               itemBuilder: (context, index) {
                 final event = timeline[index];
                 final bool isLast = index == timeline.length - 1;
-                final bool isCancelledEvent =
+                final bool isCancelledEvent = isCancelled && isLast ||
                     event.status.toLowerCase().contains('cancel') ||
-                        event.status.toLowerCase().contains('reject');
+                    event.status.toLowerCase().contains('reject');
 
                 final Color dotColor = isCancelledEvent
                     ? const Color(0xFFDC2626)
@@ -78,7 +78,7 @@ class OrderTimelineCard extends StatelessWidget {
                             boxShadow: isLast
                                 ? [
                                     BoxShadow(
-                                      color: dotColor.withOpacity(0.28),
+                                      color: dotColor.withAlpha(70),
                                       blurRadius: 6,
                                       spreadRadius: 1,
                                     ),

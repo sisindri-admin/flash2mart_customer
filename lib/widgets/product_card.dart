@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../screens/product_detail_screen.dart';
+import 'merchant_name_widget.dart';
 
 class ProductCard extends StatelessWidget {
   final String id;
@@ -41,14 +42,16 @@ class ProductCard extends StatelessWidget {
 
     if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
       try {
-        final cleanBase64 = imageStr.contains(',') ? imageStr.split(',').last : imageStr;
+        final cleanBase64 =
+            imageStr.contains(',') ? imageStr.split(',').last : imageStr;
         final bytes = base64Decode(cleanBase64.trim());
         return Image.memory(
           bytes,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.green.shade200),
+          errorBuilder: (context, error, stackTrace) =>
+              Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.green.shade200),
         );
-      } catch (e) {
+      } catch (_) {
         return Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.green.shade200);
       }
     }
@@ -56,7 +59,8 @@ class ProductCard extends StatelessWidget {
     return Image.network(
       imageStr,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.green.shade200),
+      errorBuilder: (context, error, stackTrace) =>
+          Icon(Icons.shopping_bag_outlined, size: 48, color: Colors.green.shade200),
     );
   }
 
@@ -97,14 +101,19 @@ class ProductCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Color(0x0A000000),
               blurRadius: 10,
-              offset: const Offset(0, 4),
+              offset: Offset(0, 4),
             ),
           ],
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(
+            color: quantityInCart > 0
+                ? const Color(0xFF86EFAC)
+                : const Color(0xFFE2E8F0),
+            width: quantityInCart > 0 ? 1.5 : 1,
+          ),
         ),
         child: Stack(
           clipBehavior: Clip.antiAlias,
@@ -118,7 +127,7 @@ class ProductCard extends StatelessWidget {
                     child: Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Center(
@@ -137,22 +146,55 @@ class ProductCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
 
-                  if (savingsAmount > 0 && !isOutOfStock)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Save ₹$savingsAmount',
-                        style: const TextStyle(
-                          color: Color(0xFF15803D),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
+                  // Delivery speed & Savings Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.bolt_rounded, size: 11, color: Color(0xFF00875A)),
+                            Text(
+                              '15 MINS',
+                              style: TextStyle(
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF334155),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      if (savingsAmount > 0 && !isOutOfStock)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Save ₹$savingsAmount',
+                            style: const TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+
+                  if (merchantId.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: MerchantNameWidget(merchantId: merchantId),
                     ),
 
                   Text(
@@ -169,7 +211,11 @@ class ProductCard extends StatelessWidget {
 
                   Text(
                     unit,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 6),
 
@@ -191,9 +237,9 @@ class ProductCard extends StatelessWidget {
                           if (marketPrice > price)
                             Text(
                               '₹${marketPrice.toInt()}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                color: Color(0xFF94A3B8),
                                 decoration: TextDecoration.lineThrough,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -206,14 +252,14 @@ class ProductCard extends StatelessWidget {
                               height: 32,
                               padding: const EdgeInsets.symmetric(horizontal: 10),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: const Color(0xFFE2E8F0),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Center(
                                 child: Text(
                                   'NO STOCK',
                                   style: TextStyle(
-                                    color: Colors.grey,
+                                    color: Color(0xFF64748B),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 10,
                                   ),
@@ -223,13 +269,16 @@ class ProductCard extends StatelessWidget {
                           : quantityInCart == 0
                               ? SizedBox(
                                   height: 32,
-                                  width: 66,
+                                  width: 68,
                                   child: ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF00875A).withOpacity(0.1),
+                                      backgroundColor: const Color(0xFFF0FDF4),
                                       foregroundColor: const Color(0xFF00875A),
                                       elevation: 0,
-                                      side: const BorderSide(color: Color(0xFF00875A), width: 1.5),
+                                      side: const BorderSide(
+                                        color: Color(0xFF00875A),
+                                        width: 1.5,
+                                      ),
                                       padding: EdgeInsets.zero,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
@@ -239,7 +288,7 @@ class ProductCard extends StatelessWidget {
                                     child: const Text(
                                       'ADD',
                                       style: TextStyle(
-                                        fontWeight: FontWeight.w800,
+                                        fontWeight: FontWeight.w900,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -256,8 +305,15 @@ class ProductCard extends StatelessWidget {
                                       InkWell(
                                         onTap: onRemove,
                                         child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                          child: Icon(Icons.remove, size: 14, color: Colors.white),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
+                                          ),
+                                          child: Icon(
+                                            Icons.remove,
+                                            size: 14,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                       Text(
@@ -271,8 +327,15 @@ class ProductCard extends StatelessWidget {
                                       InkWell(
                                         onTap: onAdd,
                                         child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                          child: Icon(Icons.add, size: 14, color: Colors.white),
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
+                                          ),
+                                          child: Icon(
+                                            Icons.add,
+                                            size: 14,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -293,7 +356,7 @@ class ProductCard extends StatelessWidget {
                   decoration: const BoxDecoration(
                     color: Color(0xFF2563EB),
                     borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
+                      topLeft: Radius.circular(15),
                       bottomRight: Radius.circular(12),
                     ),
                   ),
@@ -301,7 +364,7 @@ class ProductCard extends StatelessWidget {
                     '$discountPercent% OFF',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0.3,
                     ),
@@ -318,7 +381,7 @@ class ProductCard extends StatelessWidget {
                   decoration: const BoxDecoration(
                     color: Colors.redAccent,
                     borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16),
+                      topLeft: Radius.circular(15),
                       bottomRight: Radius.circular(12),
                     ),
                   ),

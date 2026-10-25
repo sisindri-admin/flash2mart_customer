@@ -25,7 +25,7 @@ class OrderItemsAndBillSection extends StatelessWidget {
         return Image.memory(
           bytes,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
+          errorBuilder: (context, error, stackTrace) => Container(
             color: Colors.green.shade50,
             child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
           ),
@@ -41,7 +41,7 @@ class OrderItemsAndBillSection extends StatelessWidget {
     return Image.network(
       imageStr,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
+      errorBuilder: (context, error, stackTrace) => Container(
         color: Colors.green.shade50,
         child: Icon(Icons.shopping_bag_outlined, size: 24, color: Colors.green.shade600),
       ),
