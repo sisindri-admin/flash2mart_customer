@@ -3,18 +3,25 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
+import '../models/cart_item_model.dart';
 import '../providers/cart_provider.dart';
+import '../services/order_sound_service.dart';
 import '../widgets/checkout/checkout_promo_and_bill_widgets.dart';
 import 'order_tracking_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final String? selectedAddress;
+  final double? customerLat;
+  final double? customerLng;
 
   const CheckoutScreen({
     super.key,
     this.selectedAddress,
+    this.customerLat,
+    this.customerLng,
   });
 
   @override
@@ -26,8 +33,50 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isPlacingOrder = false;
   CouponOffer? _appliedCoupon;
 
+  double? _resolvedLat;
+  double? _resolvedLng;
+
   final TextEditingController _instructionController = TextEditingController();
-  final ScrollController _scrollController = ScrollController(keepScrollOffset: true);
+  final ScrollController _scrollController =
+      ScrollController(keepScrollOffset: true);
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedLat = widget.customerLat;
+    _resolvedLng = widget.customerLng;
+    _ensureLiveCustomerCoordinates();
+  }
+
+  Future<void> _ensureLiveCustomerCoordinates() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final Position pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _resolvedLat = pos.latitude;
+          _resolvedLng = pos.longitude;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -116,6 +165,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _isPlacingOrder = true);
 
     try {
+      // 1. Refresh live GPS coordinates at the moment of clicking PLACE ORDER
+      if (_resolvedLat == null || _resolvedLng == null) {
+        await _ensureLiveCustomerCoordinates();
+      }
+      final double finalLat =
+          _resolvedLat ?? widget.customerLat ?? 14.4426; // Nellore fallback
+      final double finalLng =
+          _resolvedLng ?? widget.customerLng ?? 79.9865;
+      final GeoPoint customerGeoPoint = GeoPoint(finalLat, finalLng);
+      final String googleMapsPinUrl =
+          'https://www.google.com/maps/dir/?api=1&destination=$finalLat,$finalLng';
+
       final double itemTotal = cartProvider.totalAmount;
       final double discountAmount = _appliedCoupon != null
           ? _appliedCoupon!.calculateDiscount(itemTotal)
@@ -131,6 +192,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       String extractedMerchantId = '';
       String extractedStoreName = '';
+      GeoPoint? storeGeoPoint;
 
       if (cartProvider.items.isNotEmpty) {
         final firstItem = cartProvider.items.values.first;
@@ -153,19 +215,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 (pData['storeName'] ?? pData['shopName'] ?? '').toString();
           }
 
-          if (extractedMerchantId.isNotEmpty && extractedStoreName.isEmpty) {
+          if (extractedMerchantId.isNotEmpty) {
             final merchantDoc = await FirebaseFirestore.instance
                 .collection('merchants')
                 .doc(extractedMerchantId)
                 .get();
             if (merchantDoc.exists && merchantDoc.data() != null) {
               final mData = merchantDoc.data()!;
-              extractedStoreName = (mData['storeName'] ??
-                      mData['shopName'] ??
-                      mData['name'] ??
-                      mData['businessName'] ??
-                      '')
-                  .toString();
+              if (extractedStoreName.isEmpty) {
+                extractedStoreName = (mData['storeName'] ??
+                        mData['shopName'] ??
+                        mData['name'] ??
+                        mData['businessName'] ??
+                        '')
+                    .toString();
+              }
+              final dynamic rawStoreLoc =
+                  mData['storeLocation'] ?? mData['location'];
+              if (rawStoreLoc is GeoPoint) {
+                storeGeoPoint = rawStoreLoc;
+              } else if (mData['latitude'] is num &&
+                  mData['longitude'] is num) {
+                storeGeoPoint = GeoPoint(
+                  (mData['latitude'] as num).toDouble(),
+                  (mData['longitude'] as num).toDouble(),
+                );
+              }
             }
           }
         } catch (e) {
@@ -178,6 +253,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           'id': item.id,
           'name': item.name,
           'price': item.price,
+          'originalAddedPrice': item.originalAddedPrice,
           'quantity': item.quantity,
           'unit': item.unit,
           'imageUrl': item.imageUrl,
@@ -185,11 +261,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         };
       }).toList();
 
-      final String finalAddress =
-          (widget.selectedAddress != null && widget.selectedAddress!.trim().isNotEmpty)
-              ? widget.selectedAddress!.trim()
-              : 'Standard Doorstep Delivery';
+      final String finalAddress = (widget.selectedAddress != null &&
+              widget.selectedAddress!.trim().isNotEmpty)
+          ? widget.selectedAddress!.trim()
+          : 'Standard Doorstep Delivery ($finalLat, $finalLng)';
 
+      // 2. Save Customer's live GPS coordinates to 'customers/{uid}' as well
+      try {
+        await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(currentUser.uid)
+            .set({
+          'address': finalAddress,
+          'customerLocation': customerGeoPoint,
+          'latitude': finalLat,
+          'longitude': finalLng,
+          'customerLat': finalLat,
+          'customerLng': finalLng,
+          'googleMapsUrl': googleMapsPinUrl,
+          'lastOrderAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+
+      // 3. Save Order with complete Customer Live Lat-Longs so Delivery Partner navigates directly to Customer pin
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(numericOrderId)
@@ -200,6 +294,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'userPhone': currentUser.phoneNumber ?? '',
         'merchantId': extractedMerchantId,
         'storeName': extractedStoreName,
+        if (storeGeoPoint != null) 'storeLocation': storeGeoPoint,
+        'customerLocation': customerGeoPoint,
+        'customerLat': finalLat,
+        'customerLng': finalLng,
+        'latitude': finalLat,
+        'longitude': finalLng,
+        'deliveryLocation': {
+          'latitude': finalLat,
+          'longitude': finalLng,
+          'lat': finalLat,
+          'lng': finalLng,
+          'address': finalAddress,
+        },
+        'customerGoogleMapsUrl': googleMapsPinUrl,
         'items': orderItems,
         'itemTotal': itemTotal,
         'couponCode': _appliedCoupon?.code ?? '',
@@ -226,6 +334,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ],
       });
 
+      // 4. Play Order Placed Confirmation Chime Sound!
+      await OrderSoundService.playOrderPlacedSound();
+
       cartProvider.clearCart();
 
       if (!mounted) return;
@@ -234,7 +345,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _isPlacingOrder = false;
         _appliedCoupon = null;
       });
-      _showSuccessDialog(numericOrderId, deliveryOtp);
+      _showSuccessDialog(numericOrderId, deliveryOtp, finalLat, finalLng);
     } catch (e) {
       setState(() => _isPlacingOrder = false);
       if (mounted) {
@@ -248,7 +359,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  void _showSuccessDialog(String orderId, String deliveryOtp) {
+  void _showSuccessDialog(
+    String orderId,
+    String deliveryOtp,
+    double lat,
+    double lng,
+  ) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -256,10 +372,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Column(
           children: [
-            Icon(Icons.check_circle_rounded, color: Color(0xFF00875A), size: 62),
+            Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF00875A),
+              size: 62,
+            ),
             SizedBox(height: 10),
             Text(
-              'Order Placed Successfully!',
+              'Order Placed Successfully! 🔔',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
@@ -277,7 +397,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.my_location_rounded,
+                    size: 14,
+                    color: Color(0xFF00875A),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Live GPS Shared (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF15803D),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
@@ -329,12 +479,122 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Widget _buildPriceChangeNoticeBanner(List<CartItem> changedItems) {
+    if (changedItems.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFDE68A), width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.price_change_rounded,
+                color: Color(0xFFD97706),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Live Price Update (${changedItems.length} ${changedItems.length == 1 ? 'item' : 'items'} updated)',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'మీరు కార్ట్‌లో యాడ్ చేసినప్పటి నుండి ఈ ప్రొడక్ట్స్ ధరలు మారాయి. ప్రస్తుత లైవ్ ధరలు క్రింద అప్‌డేట్ చేయబడ్డాయి:',
+            style: TextStyle(
+              fontSize: 11.5,
+              color: Color(0xFF78350F),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...changedItems.map((item) {
+            final bool isDrop = item.price < item.originalAddedPrice;
+            return Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Row(
+                children: [
+                  Icon(
+                    isDrop
+                        ? Icons.trending_down_rounded
+                        : Icons.trending_up_rounded,
+                    size: 14,
+                    color: isDrop
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFDC2626),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '₹${item.originalAddedPrice.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF94A3B8),
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '₹${item.price.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: isDrop
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFDC2626),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String displayAddress =
         (widget.selectedAddress != null && widget.selectedAddress!.isNotEmpty)
             ? widget.selectedAddress!
             : 'దయచేసి అడ్రస్‌ని ఎంచుకోండి';
+
+    final double? activeLat = _resolvedLat ?? widget.customerLat;
+    final double? activeLng = _resolvedLng ?? widget.customerLng;
 
     return PopScope(
       canPop: false,
@@ -368,6 +628,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             }
 
             final cartItems = cartProvider.items.values.toList();
+            final changedItems = cartProvider.priceChangedItems;
             final double itemTotal = cartProvider.totalAmount;
             final double discountAmount = _appliedCoupon != null
                 ? _appliedCoupon!.calculateDiscount(itemTotal)
@@ -379,8 +640,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 (itemTotal - discountAmount + deliveryFee + handlingFee)
                     .clamp(0.0, double.infinity);
 
-            final double totalSavings =
-                discountAmount + (deliveryFee == 0 && itemTotal > 0 ? 25.0 : 0.0);
+            final double totalSavings = discountAmount +
+                (deliveryFee == 0 && itemTotal > 0 ? 25.0 : 0.0);
 
             return SingleChildScrollView(
               controller: _scrollController,
@@ -389,13 +650,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 key: const ValueKey('checkout_column'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 0. LIVE PRICE CHANGE BANNER (when cart items changed price after days)
+                  _buildPriceChangeNoticeBanner(changedItems),
+
                   // 1. FREE DELIVERY PROGRESS BANNER
                   CheckoutFreeDeliveryBanner(itemTotal: itemTotal),
                   const SizedBox(height: 14),
 
-                  // 2. DELIVERY ADDRESS SUMMARY
+                  // 2. DELIVERY ADDRESS + LIVE GPS LAT-LONG BADGE
                   _buildSectionCard(
-                    title: 'Delivery Address',
+                    title: 'Delivery Address & Live GPS Pin',
                     icon: Icons.location_on_rounded,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,27 +672,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             color: Color(0xFF1E293B),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const Row(
-                          children: [
-                            Icon(Icons.bolt_rounded, size: 15, color: Colors.amber),
-                            SizedBox(width: 4),
-                            Text(
-                              'Superfast Delivery in 15 mins',
-                              style: TextStyle(
-                                fontSize: 12,
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.gps_fixed_rounded,
+                                size: 15,
                                 color: Color(0xFF00875A),
-                                fontWeight: FontWeight.bold,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  activeLat != null && activeLng != null
+                                      ? 'Live GPS Locked (${activeLat.toStringAsFixed(4)}, ${activeLng.toStringAsFixed(4)}) • Shared with Delivery Partner'
+                                      : 'Capturing live GPS coordinates for Delivery Partner...',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: Color(0xFF15803D),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
 
-                  // 3. ORDER SUMMARY LIST
+                  // 3. ORDER SUMMARY LIST (With Old vs New Price indicator if price changed)
                   _buildSectionCard(
                     title: 'Order Summary (${cartItems.length} Items)',
                     icon: Icons.shopping_bag_outlined,
@@ -453,9 +736,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: cartItems.length,
-                      separatorBuilder: (context, index) => const Divider(height: 16),
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 16),
                       itemBuilder: (context, index) {
                         final item = cartItems[index];
+                        final bool priceChanged = item.hasPriceChanged;
+                        final bool isPriceDrop =
+                            item.price < item.originalAddedPrice;
+
                         return Row(
                           key: ValueKey(item.id),
                           children: [
@@ -465,7 +753,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
@@ -485,13 +775,74 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       color: Color(0xFF1E293B),
                                     ),
                                   ),
-                                  Text(
-                                    '${item.unit} • ₹${item.price.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF64748B),
+                                  const SizedBox(height: 2),
+                                  if (!priceChanged)
+                                    Text(
+                                      '${item.unit} • ₹${item.price.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    )
+                                  else
+                                    Wrap(
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      spacing: 5,
+                                      children: [
+                                        Text(
+                                          '${item.unit} •',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${item.originalAddedPrice.toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF94A3B8),
+                                            decoration:
+                                                TextDecoration.lineThrough,
+                                          ),
+                                        ),
+                                        Text(
+                                          '₹${item.price.toStringAsFixed(0)}',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w900,
+                                            color: isPriceDrop
+                                                ? const Color(0xFF16A34A)
+                                                : const Color(0xFFD97706),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isPriceDrop
+                                                ? const Color(0xFFDCFCE7)
+                                                : const Color(0xFFFEF3C7),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            isPriceDrop
+                                                ? 'Price Dropped'
+                                                : 'Updated Price',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: isPriceDrop
+                                                  ? const Color(0xFF15803D)
+                                                  : const Color(0xFFB45309),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -505,7 +856,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   InkWell(
-                                    onTap: () => cartProvider.removeSingleItem(item.id),
+                                    onTap: () =>
+                                        cartProvider.removeSingleItem(item.id),
                                     child: const Padding(
                                       padding: EdgeInsets.symmetric(
                                         horizontal: 10,
@@ -590,8 +942,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         TextField(
                           controller: _instructionController,
                           decoration: const InputDecoration(
-                            hintText: 'Add custom note for delivery partner...',
-                            hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+                            hintText:
+                                'Add custom note for delivery partner...',
+                            hintStyle:
+                                TextStyle(fontSize: 12, color: Colors.grey),
                             border: InputBorder.none,
                             isDense: true,
                           ),
@@ -619,7 +973,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          secondary: const Icon(Icons.money, color: Colors.green),
+                          secondary:
+                              const Icon(Icons.money, color: Colors.green),
                           onChanged: (val) {
                             if (val != null) {
                               setState(() => _selectedPaymentMethod = val);
@@ -659,7 +1014,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     icon: Icons.receipt_long_outlined,
                     child: Column(
                       children: [
-                        _buildBillRow('Item Total', '₹${itemTotal.toStringAsFixed(2)}'),
+                        _buildBillRow(
+                          'Item Total',
+                          '₹${itemTotal.toStringAsFixed(2)}',
+                        ),
                         if (discountAmount > 0) ...[
                           const SizedBox(height: 8),
                           _buildBillRow(
@@ -856,7 +1214,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF00875A),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,6 +11,7 @@ import '../services/smart_recommendation_engine.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/custom_bottom_navbar.dart';
 import '../widgets/home/active_order_floating_banner.dart';
+import '../widgets/home/festival_offer_banner.dart';
 import '../widgets/home/home_product_sections.dart';
 import '../widgets/home/home_trust_and_promo_widgets.dart';
 import '../widgets/offer_slider_banner.dart';
@@ -31,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _homeScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   String _searchQuery = '';
   String _selectedCategory = 'All';
@@ -38,13 +42,44 @@ class _HomeScreenState extends State<HomeScreen> {
   int _endlessBatchCount = 2;
 
   String _currentAddress = 'Fetch Live Location...';
+  double? _currentLat;
+  double? _currentLng;
   bool _isLoadingLocation = false;
+  bool _isSearchFocused = false;
+
+  // Vertical scrolling search bar hint quotes & product names
+  Timer? _searchHintTimer;
+  int _searchHintIndex = 0;
+  static const List<String> _rotatingSearchHints = [
+    'Search "Fresh Milk, Curd & Pure Ghee" 🥛',
+    'Search "Sona Masoori Rice & Toor Dal" 🌾',
+    'Search "Farm Fresh Tomatoes & Onions" 🍅',
+    'Search "Sunflower Oil, Atta & Masala" 🌻',
+    'Search "Festival Sweets & Dry Fruits" 🪔',
+    'Search "Cold Drinks, Biscuits & Snacks" 🍪',
+    '"Order Now — 15 Mins Doorstep Delivery!" ⚡',
+  ];
 
   @override
   void initState() {
     super.initState();
     _fetchLiveLocation();
     _homeScrollController.addListener(_onHomeScroll);
+    _searchFocusNode.addListener(() {
+      if (mounted) {
+        setState(() {
+          _isSearchFocused = _searchFocusNode.hasFocus;
+        });
+      }
+    });
+    _searchHintTimer = Timer.periodic(const Duration(milliseconds: 2300), (_) {
+      if (mounted && _searchQuery.isEmpty && !_isSearchFocused) {
+        setState(() {
+          _searchHintIndex =
+              (_searchHintIndex + 1) % _rotatingSearchHints.length;
+        });
+      }
+    });
   }
 
   void _onHomeScroll() {
@@ -60,11 +95,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _searchHintTimer?.cancel();
     _homeScrollController.removeListener(_onHomeScroll);
     _homeScrollController.dispose();
     _searchController.dispose();
     _addressEditController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveUserLiveCoordinatesToFirestore(
+    double lat,
+    double lng,
+    String address,
+  ) async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('customers')
+          .doc(user.uid)
+          .set({
+        'address': address,
+        'customerLocation': GeoPoint(lat, lng),
+        'latitude': lat,
+        'longitude': lng,
+        'customerLat': lat,
+        'customerLng': lng,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<void> _fetchLiveLocation() async {
@@ -75,6 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _currentAddress = 'GPS Off - Select Manually';
+            _currentLat ??= 14.4426;
+            _currentLng ??= 79.9865;
             _isLoadingLocation = false;
           });
         }
@@ -88,6 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
           if (mounted) {
             setState(() {
               _currentAddress = 'Permission Denied';
+              _currentLat ??= 14.4426;
+              _currentLng ??= 79.9865;
               _isLoadingLocation = false;
             });
           }
@@ -99,6 +163,8 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) {
           setState(() {
             _currentAddress = 'Enable Location in Settings';
+            _currentLat ??= 14.4426;
+            _currentLng ??= 79.9865;
             _isLoadingLocation = false;
           });
         }
@@ -110,6 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
           accuracy: LocationAccuracy.high,
         ),
       );
+
+      _currentLat = position.latitude;
+      _currentLng = position.longitude;
 
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
@@ -143,11 +212,19 @@ class _HomeScreenState extends State<HomeScreen> {
           _addressEditController.text = _currentAddress;
           _isLoadingLocation = false;
         });
+
+        _saveUserLiveCoordinatesToFirestore(
+          position.latitude,
+          position.longitude,
+          _currentAddress,
+        );
       }
     } catch (_) {
       if (mounted) {
         setState(() {
           _currentAddress = 'Vedayapalem, Main Road, Nellore - 524004';
+          _currentLat ??= 14.4426;
+          _currentLng ??= 79.9865;
           _addressEditController.text = _currentAddress;
           _isLoadingLocation = false;
         });
@@ -220,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           Text(
-                            'Using satellite precise location for 15-min delivery',
+                            'Saves exact GPS Lat-Long for Delivery Partner',
                             style: TextStyle(fontSize: 11, color: Colors.grey),
                           ),
                         ],
@@ -298,13 +375,31 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () {
-                    if (_addressEditController.text.trim().isNotEmpty) {
+                  onPressed: () async {
+                    final String typed = _addressEditController.text.trim();
+                    if (typed.isNotEmpty) {
                       setState(() {
-                        _currentAddress = _addressEditController.text.trim();
+                        _currentAddress = typed;
                       });
+                      try {
+                        final List<Location> locs =
+                            await locationFromAddress(typed);
+                        if (locs.isNotEmpty && mounted) {
+                          setState(() {
+                            _currentLat = locs.first.latitude;
+                            _currentLng = locs.first.longitude;
+                          });
+                          _saveUserLiveCoordinatesToFirestore(
+                            locs.first.latitude,
+                            locs.first.longitude,
+                            typed,
+                          );
+                        }
+                      } catch (_) {}
                     }
-                    Navigator.pop(context);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
                   },
                   child: const Text(
                     'CONFIRM LOCATION',
@@ -451,7 +546,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
+                          // Dynamic Festival Offers Banner with Festival Name
+                          FestivalOfferBanner(
+                            onShopFestivalTap: () {
+                              setState(() {
+                                _activeQuickFilter = 'offers';
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 4),
                           const OfferSliderBanner(),
                           const HomeTrustBadgeStrip(),
                           HomeCategoryGridSection(
@@ -832,7 +936,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Tab 3: Offers Tab (Super Saver Deals in 3-Column Image 3 Grid + Support Access)
+  /// Tab 3: Offers Tab (Festival Banner + Super Saver Deals in 3-Column Image 3 Grid)
   Widget _buildOffersBody() {
     return SafeArea(
       child: Column(
@@ -853,7 +957,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     SizedBox(width: 10),
                     Text(
-                      'Special Offers & Super Savers',
+                      'Festival & Super Saver Offers',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 17,
@@ -907,7 +1011,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.only(bottom: 32),
                   children: [
-                    const SizedBox(height: 10),
+                    const FestivalOfferBanner(),
+                    const SizedBox(height: 6),
                     const OfferSliderBanner(),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(14, 14, 14, 10),
@@ -988,8 +1093,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          CheckoutScreen(selectedAddress: _currentAddress),
+                      builder: (_) => CheckoutScreen(
+                        selectedAddress: _currentAddress,
+                        customerLat: _currentLat,
+                        customerLng: _currentLng,
+                      ),
                     ),
                   );
                 },
@@ -1010,6 +1118,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildAttractiveHeader() {
+    final bool showAnimatedHint = _searchQuery.isEmpty && !_isSearchFocused;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       decoration: const BoxDecoration(
@@ -1083,7 +1193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Expanded(
                             child: Text(
                               _isLoadingLocation
-                                  ? 'Detecting location...'
+                                  ? 'Detecting live GPS location...'
                                   : _currentAddress,
                               style: const TextStyle(
                                 color: Colors.white,
@@ -1105,6 +1215,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(width: 8),
+
+              // Requirement 6: Small Help Icon next to Profile Icon -> Navigates to HelpScreen
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HelpScreen(),
+                    ),
+                  );
+                },
+                child: Tooltip(
+                  message: 'Help & Support',
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0x33FFFFFF),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white30),
+                    ),
+                    child: const Icon(
+                      Icons.help_outline_rounded,
+                      color: Colors.white,
+                      size: 21,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Profile Icon
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -1118,6 +1260,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
                 child: const CircleAvatar(
+                  radius: 19,
                   backgroundColor: Color(0x33FFFFFF),
                   child: Icon(Icons.person_outline, color: Colors.white),
                 ),
@@ -1125,6 +1268,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 14),
+
+          // Requirement 5: Search Bar with Upward-Scrolling Animated Product Names & Quote
           Container(
             height: 46,
             decoration: BoxDecoration(
@@ -1138,33 +1283,102 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (v) =>
-                  setState(() => _searchQuery = v.trim().toLowerCase()),
-              decoration: InputDecoration(
-                hintText: 'Search milk, fresh vegetables, rice, snacks...',
-                hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: Color(0xFF00875A),
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(
-                          Icons.cancel_rounded,
-                          size: 18,
-                          color: Colors.grey,
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                if (showAnimatedHint)
+                  Positioned(
+                    left: 46,
+                    right: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 420),
+                          transitionBuilder:
+                              (Widget child, Animation<double> animation) {
+                            final bool isIncoming = child.key ==
+                                ValueKey<int>(_searchHintIndex);
+                            final Tween<Offset> slideTween = isIncoming
+                                ? Tween<Offset>(
+                                    begin: const Offset(0.0, 0.95),
+                                    end: Offset.zero,
+                                  )
+                                : Tween<Offset>(
+                                    begin: const Offset(0.0, -0.95),
+                                    end: Offset.zero,
+                                  );
+                            return ClipRect(
+                              child: SlideTransition(
+                                position: slideTween.animate(
+                                  CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutCubic,
+                                  ),
+                                ),
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                            );
+                          },
+                          child: SizedBox(
+                            key: ValueKey<int>(_searchHintIndex),
+                            width: double.infinity,
+                            child: Text(
+                              _rotatingSearchHints[_searchHintIndex],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  onChanged: (v) =>
+                      setState(() => _searchQuery = v.trim().toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: showAnimatedHint
+                        ? ''
+                        : 'Search milk, vegetables, rice, snacks...',
+                    hintStyle: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: Color(0xFF00875A),
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(
+                              Icons.cancel_rounded,
+                              size: 18,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
