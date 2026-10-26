@@ -5,43 +5,44 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 class LocationService {
+  static const String defaultNelloreAddress =
+      'Podalakur Road- 5/523, Podalakur Rd, Telugu Ganga Colony, Nellore - 524004';
+
   static Future<String> getCurrentAddress() async {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // 1. Location Service చెక్ చేయడం
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return 'GPS / Location Disabled';
-    }
-
-    // 2. Permission చెక్ చేయడం
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return 'Location Permission Denied';
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return 'Location Permission Denied';
-    }
-
     try {
-      // 3. Current Latitude & Longitude తీసుకోవడం
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return defaultNelloreAddress;
+      }
+
+      permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return defaultNelloreAddress;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return defaultNelloreAddress;
+      }
+
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
+          accuracy: LocationAccuracy.high,
         ),
       );
 
-      // 4. Flutter WEB (Chrome) ఐతే OpenStreetMap API వాడుతుంది
       if (kIsWeb) {
-        return await _getAddressFromWebAPI(position.latitude, position.longitude);
+        return await _getAddressFromWebAPI(
+          position.latitude,
+          position.longitude,
+        );
       }
 
-      // 5. ANDROID / IOS ఐతే Native Geocoding వాడుతుంది
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
@@ -56,7 +57,9 @@ class LocationService {
 
         List<String> parts = [];
         if (street.isNotEmpty) parts.add(street);
-        if (subLocality.isNotEmpty && !street.contains(subLocality)) parts.add(subLocality);
+        if (subLocality.isNotEmpty && !street.contains(subLocality)) {
+          parts.add(subLocality);
+        }
         if (locality.isNotEmpty) parts.add(locality);
         if (postalCode.isNotEmpty) parts.add(postalCode);
 
@@ -64,37 +67,41 @@ class LocationService {
       }
     } catch (e) {
       debugPrint('Location Fetch Error: $e');
-      return 'Nellore, Andhra Pradesh'; // Fallback Address
+      return defaultNelloreAddress;
     }
 
-    return 'Netaji Nagar, Nellore';
+    return defaultNelloreAddress;
   }
 
-  // Web Browser లో Geocoding సపోర్ట్ చేయడానికి వెబ్ హెల్పర్ మెథడ్
   static Future<String> _getAddressFromWebAPI(double lat, double lng) async {
     try {
-      // 'zoom=18' ఇస్తే బిల్డింగ్ లేదా రోడ్ లెవెల్ కచ్చితత్వం వస్తుంది
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1',
       );
-      final response = await http.get(url, headers: {
-        'User-Agent': 'Flash2MartCustomerApp/1.0',
-      });
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'Flash2MartCustomerApp/1.0'},
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final address = data['address'];
         if (address != null) {
           String houseNumber = address['house_number'] ?? '';
-          String road = address['road'] ?? address['pedestrian'] ?? address['suburb'] ?? '';
-          String neighbourhood = address['neighbourhood'] ?? address['residential'] ?? '';
-          String city = address['city'] ?? address['town'] ?? address['village'] ?? '';
+          String road =
+              address['road'] ?? address['pedestrian'] ?? address['suburb'] ?? '';
+          String neighbourhood =
+              address['neighbourhood'] ?? address['residential'] ?? '';
+          String city =
+              address['city'] ?? address['town'] ?? address['village'] ?? '';
           String postcode = address['postcode'] ?? '';
 
           List<String> parts = [];
-          if (houseNumber.isNotEmpty) parts.add('D.No: $houseNumber');
+          if (houseNumber.isNotEmpty) parts.add(houseNumber);
           if (road.isNotEmpty) parts.add(road);
-          if (neighbourhood.isNotEmpty && neighbourhood != road) parts.add(neighbourhood);
+          if (neighbourhood.isNotEmpty && neighbourhood != road) {
+            parts.add(neighbourhood);
+          }
           if (city.isNotEmpty) parts.add(city);
           if (postcode.isNotEmpty) parts.add(postcode);
 
@@ -104,6 +111,6 @@ class LocationService {
     } catch (e) {
       debugPrint('Web Geocoding API Error: $e');
     }
-    return 'Vedayapalem, Nellore';
+    return defaultNelloreAddress;
   }
 }

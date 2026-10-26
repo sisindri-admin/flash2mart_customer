@@ -76,7 +76,11 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
     );
   }
 
-  void _openFullScreenPhoto(BuildContext context, String imageStr, String author) {
+  void _openFullScreenPhoto(
+    BuildContext context,
+    String imageStr,
+    String author,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -171,7 +175,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Star Rating Selector
                   Center(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -231,13 +234,22 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
                       OutlinedButton.icon(
                         onPressed: () => pickReviewImage(ImageSource.camera),
                         icon: const Icon(Icons.camera_alt_outlined, size: 16),
-                        label: const Text('Camera', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          'Camera',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton.icon(
                         onPressed: () => pickReviewImage(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library_outlined, size: 16),
-                        label: const Text('Gallery', style: TextStyle(fontSize: 12)),
+                        icon: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'Gallery',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ],
                   ),
@@ -393,7 +405,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
       builder: (context, snapshot) {
         final List<QueryDocumentSnapshot> liveDocs = snapshot.data?.docs ?? [];
 
-        // Sort live reviews newest first
         final List<QueryDocumentSnapshot> sortedLive =
             List<QueryDocumentSnapshot>.from(liveDocs);
         sortedLive.sort((a, b) {
@@ -405,7 +416,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
           return bT.compareTo(aT);
         });
 
-        // Build unified review items (Real-time Firestore reviews + baseline verified reviews)
         final List<Map<String, dynamic>> allReviews = [
           ...sortedLive.map((doc) {
             final d = doc.data() as Map<String, dynamic>;
@@ -451,7 +461,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
           },
         ];
 
-        // Collect all real customer photos
         final List<Map<String, String>> customerPhotos = [];
         for (final rev in allReviews) {
           final String p = (rev['photo'] ?? '').toString().trim();
@@ -463,7 +472,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
           }
         }
 
-        // Compute dynamic rating distribution
         final int extraCount = sortedLive.length;
         final int star5 = 620 +
             sortedLive
@@ -498,7 +506,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header + Add Photo Review Button
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -539,8 +546,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
                 ],
               ),
               const SizedBox(height: 14),
-
-              // Live Rating Box + 5 Progress Bars
               Row(
                 children: [
                   Container(
@@ -649,8 +654,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
                 ],
               ),
               const Divider(height: 26),
-
-              // Real Customer Photos Strip
               if (customerPhotos.isNotEmpty) ...[
                 Text(
                   'Real Customer Photos (${23 + customerPhotos.length})',
@@ -691,8 +694,6 @@ class _RealtimeReviewsWidgetState extends State<RealtimeReviewsWidget> {
                 ),
                 const SizedBox(height: 14),
               ],
-
-              // Real-Time Customer Review Cards
               ...allReviews.take(8).map((rev) {
                 final String revId = rev['id'] as String;
                 final bool isFirestore = rev['isFirestore'] as bool;

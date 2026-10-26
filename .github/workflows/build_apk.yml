@@ -9,6 +9,8 @@ on:
       - dev-customer-app-2
       - dev-branch
       - dev-branch-1
+      - dev-branch-2
+
 
 permissions:
   contents: write

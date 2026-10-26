@@ -17,7 +17,7 @@ class AppLogo extends StatelessWidget {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF00875A).withOpacity(0.3),
+                color: const Color(0x4D00875A),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -36,7 +36,7 @@ class AppLogo extends StatelessWidget {
           text: TextSpan(
             style: TextStyle(
               fontSize: size * 0.28,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               letterSpacing: -0.5,
             ),
             children: const [
