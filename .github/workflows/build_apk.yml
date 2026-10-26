@@ -8,6 +8,7 @@ on:
       - dev-customer-app
       - dev-customer-app-2
       - dev-branch
+      - dev-branch-1
 
 permissions:
   contents: write

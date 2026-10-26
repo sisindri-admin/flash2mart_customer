@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/cart_provider.dart';
 import '../../screens/product_detail_screen.dart';
+import '../../services/smart_recommendation_engine.dart';
 
 class HomeProductSections extends StatelessWidget {
   final List<QueryDocumentSnapshot> allDocs;
@@ -37,9 +39,14 @@ class HomeProductSections extends StatelessWidget {
     final List<QueryDocumentSnapshot> flashDealDocs = inStockDocs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final double price = ((data['price'] ?? 0) as num).toDouble();
-      final double marketPrice = ((data['marketPrice'] ?? price) as num).toDouble();
+      final double marketPrice =
+          ((data['marketPrice'] ?? price) as num).toDouble();
       return marketPrice > price && price > 0;
     }).take(8).toList();
+
+    // Category-wise sections (Milk/Curd/Dairy, Vegetables & Fruits, Cooking & Grocery, etc.)
+    final List<CategorySectionGroup> categorySections =
+        SmartRecommendationEngine.buildCategorySections(allDocs);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,6 +73,19 @@ class HomeProductSections extends StatelessWidget {
             onCartUpdated: onCartUpdated,
             isFlashDeal: true,
           ),
+        // Category-wise Horizontal Carousels on Home Screen
+        ...categorySections.map((group) {
+          return _HorizontalProductSection(
+            title: group.title,
+            subtitle: group.subtitle,
+            badgeText: 'CATEGORY',
+            badgeColor: group.accentColor,
+            headerBgGradient: [group.bgTint, const Color(0xFFF8FAFC)],
+            docs: group.products.take(10).toList(),
+            onCartUpdated: onCartUpdated,
+            isFlashDeal: false,
+          );
+        }),
       ],
     );
   }
@@ -153,7 +173,8 @@ class _HorizontalProductSection extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: badgeColor,
                     borderRadius: BorderRadius.circular(12),
@@ -182,20 +203,28 @@ class _HorizontalProductSection extends StatelessWidget {
                 final doc = docs[index];
                 final data = doc.data() as Map<String, dynamic>;
                 final String productId = doc.id;
-                final String name = (data['name'] ?? data['title'] ?? 'Product').toString();
+                final String name =
+                    (data['name'] ?? data['title'] ?? 'Product').toString();
                 final double price = ((data['price'] ?? 0) as num).toDouble();
-                final double marketPrice = ((data['marketPrice'] ?? price) as num).toDouble();
-                final String unit = (data['unit'] ?? data['weight'] ?? '1 unit').toString();
-                final String imageUrl =
-                    (data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '').toString();
+                final double marketPrice =
+                    ((data['marketPrice'] ?? price) as num).toDouble();
+                final String unit =
+                    (data['unit'] ?? data['weight'] ?? '1 unit').toString();
+                final String imageUrl = (data['imageBase64'] ??
+                        data['imageUrl'] ??
+                        data['image'] ??
+                        '')
+                    .toString();
                 final int stock = ((data['stock'] ?? 1) as num).toInt();
                 final String merchantId = (data['merchantId'] ?? '').toString();
                 final String category =
                     (data['category'] ?? 'Grocery / Supermarket').toString();
-                final String description = (data['description'] ?? '').toString();
+                final String description =
+                    (data['description'] ?? '').toString();
 
                 return Selector<CartProvider, int>(
-                  selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
+                  selector: (context, cart) =>
+                      cart.items[productId]?.quantity ?? 0,
                   builder: (context, qty, child) {
                     return _CompactHorizontalProductCard(
                       id: productId,
@@ -252,6 +281,8 @@ class _CompactHorizontalProductCard extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback onRemove;
 
+  static final Map<String, Uint8List> _sharedBase64Cache = {};
+
   const _CompactHorizontalProductCard({
     required this.id,
     required this.name,
@@ -270,31 +301,52 @@ class _CompactHorizontalProductCard extends StatelessWidget {
   });
 
   Widget _buildImage(String imageStr) {
-    if (imageStr.trim().isEmpty) {
-      return Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.green.shade200);
+    final String trimmed = imageStr.trim();
+    if (trimmed.isEmpty) {
+      return Icon(
+        Icons.shopping_bag_outlined,
+        size: 40,
+        color: Colors.green.shade200,
+      );
     }
 
-    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
-      try {
-        final cleanBase64 =
-            imageStr.contains(',') ? imageStr.split(',').last : imageStr;
-        final bytes = base64Decode(cleanBase64.trim());
-        return Image.memory(
-          bytes,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) =>
-              Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.green.shade200),
-        );
-      } catch (_) {
-        return Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.green.shade200);
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      Uint8List? bytes = _sharedBase64Cache[trimmed];
+      if (bytes == null) {
+        try {
+          final cleanBase64 =
+              trimmed.contains(',') ? trimmed.split(',').last : trimmed;
+          bytes = base64Decode(cleanBase64.trim());
+          _sharedBase64Cache[trimmed] = bytes;
+        } catch (_) {
+          return Icon(
+            Icons.shopping_bag_outlined,
+            size: 40,
+            color: Colors.green.shade200,
+          );
+        }
       }
+      return Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.shopping_bag_outlined,
+          size: 40,
+          color: Colors.green.shade200,
+        ),
+      );
     }
 
     return Image.network(
-      imageStr,
+      trimmed,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) =>
-          Icon(Icons.shopping_bag_outlined, size: 40, color: Colors.green.shade200),
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => Icon(
+        Icons.shopping_bag_outlined,
+        size: 40,
+        color: Colors.green.shade200,
+      ),
     );
   }
 
@@ -334,7 +386,9 @@ class _CompactHorizontalProductCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isFlashDeal ? const Color(0xFFFECACA) : const Color(0xFFE2E8F0),
+            color: isFlashDeal
+                ? const Color(0xFFFECACA)
+                : const Color(0xFFE2E8F0),
           ),
           boxShadow: const [
             BoxShadow(
@@ -365,7 +419,11 @@ class _CompactHorizontalProductCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.bolt_rounded, size: 12, color: Color(0xFF00875A)),
+                      const Icon(
+                        Icons.bolt_rounded,
+                        size: 12,
+                        color: Color(0xFF00875A),
+                      ),
                       const SizedBox(width: 2),
                       Text(
                         isFlashDeal ? 'FAST DEAL' : '15 MINS',
@@ -466,8 +524,13 @@ class _CompactHorizontalProductCard extends StatelessWidget {
                                   InkWell(
                                     onTap: onRemove,
                                     child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 5),
-                                      child: Icon(Icons.remove, size: 13, color: Colors.white),
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 5),
+                                      child: Icon(
+                                        Icons.remove,
+                                        size: 13,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                   Text(
@@ -481,8 +544,13 @@ class _CompactHorizontalProductCard extends StatelessWidget {
                                   InkWell(
                                     onTap: onAdd,
                                     child: const Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 5),
-                                      child: Icon(Icons.add, size: 13, color: Colors.white),
+                                      padding:
+                                          EdgeInsets.symmetric(horizontal: 5),
+                                      child: Icon(
+                                        Icons.add,
+                                        size: 13,
+                                        color: Colors.white,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -498,9 +566,12 @@ class _CompactHorizontalProductCard extends StatelessWidget {
                 top: 0,
                 left: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: isFlashDeal ? const Color(0xFFDC2626) : const Color(0xFF2563EB),
+                    color: isFlashDeal
+                        ? const Color(0xFFDC2626)
+                        : const Color(0xFF2563EB),
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(15),
                       bottomRight: Radius.circular(10),
@@ -565,7 +636,11 @@ class HomeProductSkeletonGrid extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(height: 16, width: 45, color: const Color(0xFFF1F5F9)),
+                  Container(
+                    height: 16,
+                    width: 45,
+                    color: const Color(0xFFF1F5F9),
+                  ),
                   Container(
                     height: 30,
                     width: 60,

@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
+import '../services/smart_recommendation_engine.dart';
 import '../widgets/bottom_order_bar.dart';
 import '../widgets/custom_bottom_navbar.dart';
 import '../widgets/home/active_order_floating_banner.dart';
@@ -27,12 +28,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
+  final ScrollController _homeScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
 
   String _searchQuery = '';
   String _selectedCategory = 'All';
-  String _activeQuickFilter = 'all'; // all, offers, under99, instock, price_asc
+  String _activeQuickFilter = 'all';
+  int _endlessBatchCount = 2;
 
   String _currentAddress = 'Fetch Live Location...';
   bool _isLoadingLocation = false;
@@ -41,10 +44,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchLiveLocation();
+    _homeScrollController.addListener(_onHomeScroll);
+  }
+
+  void _onHomeScroll() {
+    if (!_homeScrollController.hasClients) return;
+    final maxScroll = _homeScrollController.position.maxScrollExtent;
+    final currentScroll = _homeScrollController.position.pixels;
+    if (maxScroll - currentScroll <= 450) {
+      setState(() {
+        _endlessBatchCount += 2;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _homeScrollController.removeListener(_onHomeScroll);
+    _homeScrollController.dispose();
     _searchController.dispose();
     _addressEditController.dispose();
     super.dispose();
@@ -304,6 +321,59 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildProductCardFromDoc(QueryDocumentSnapshot doc, {String keyPrefix = 'product'}) {
+    final data = doc.data() as Map<String, dynamic>;
+    final String productId = doc.id;
+    final String productName =
+        (data['name'] ?? data['title'] ?? 'Product').toString();
+    final double productPrice = ((data['price'] ?? 0) as num).toDouble();
+    final double marketPrice =
+        ((data['marketPrice'] ?? productPrice) as num).toDouble();
+    final String productUnit =
+        (data['unit'] ?? data['weight'] ?? '1 unit').toString();
+    final String imageUrl =
+        (data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '')
+            .toString();
+    final int productStock = ((data['stock'] ?? 1) as num).toInt();
+
+    final String merchantId = (data['merchantId'] ?? '').toString();
+    final String category =
+        (data['category'] ?? 'Grocery / Supermarket').toString();
+    final String description = (data['description'] ?? '').toString();
+
+    return Selector<CartProvider, int>(
+      selector: (context, cart) => cart.items[productId]?.quantity ?? 0,
+      builder: (context, currentQty, child) {
+        return ProductCard(
+          key: ValueKey('${keyPrefix}_$productId'),
+          id: productId,
+          name: productName,
+          price: productPrice,
+          marketPrice: marketPrice,
+          unit: productUnit,
+          imageUrl: imageUrl,
+          stock: productStock,
+          merchantId: merchantId,
+          category: category,
+          description: description,
+          quantityInCart: currentQty,
+          onAdd: () {
+            context.read<CartProvider>().addItem(
+                  id: productId,
+                  name: productName,
+                  price: productPrice,
+                  unit: productUnit,
+                  imageUrl: imageUrl,
+                );
+          },
+          onRemove: () {
+            context.read<CartProvider>().removeSingleItem(productId);
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildHomeBody() {
     return SafeArea(
       child: Column(
@@ -318,7 +388,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 final List<QueryDocumentSnapshot> allDocs =
                     snapshot.data?.docs ?? [];
 
-                // Apply Search, Category, and Quick Filter
                 final List<QueryDocumentSnapshot> filteredDocs = allDocs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final String name =
@@ -365,6 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     allDocs.isNotEmpty;
 
                 return CustomScrollView(
+                  controller: _homeScrollController,
                   physics: const BouncingScrollPhysics(),
                   slivers: [
                     SliverToBoxAdapter(
@@ -498,76 +568,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       )
-                    else
+                    else ...[
+                      // Main Filtered Grid
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         sliver: SliverGrid(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
-                              final doc = filteredDocs[index];
-                              final data = doc.data() as Map<String, dynamic>;
-
-                              final String productId = doc.id;
-                              final String productName =
-                                  (data['name'] ?? data['title'] ?? 'Product')
-                                      .toString();
-                              final double productPrice =
-                                  ((data['price'] ?? 0) as num).toDouble();
-                              final double marketPrice =
-                                  ((data['marketPrice'] ?? productPrice) as num)
-                                      .toDouble();
-                              final String productUnit =
-                                  (data['unit'] ?? data['weight'] ?? '1 unit')
-                                      .toString();
-                              final String imageUrl = (data['imageBase64'] ??
-                                      data['imageUrl'] ??
-                                      data['image'] ??
-                                      '')
-                                  .toString();
-                              final int productStock =
-                                  ((data['stock'] ?? 1) as num).toInt();
-
-                              final String merchantId =
-                                  (data['merchantId'] ?? '').toString();
-                              final String category = (data['category'] ??
-                                      'Grocery / Supermarket')
-                                  .toString();
-                              final String description =
-                                  (data['description'] ?? '').toString();
-
-                              return Selector<CartProvider, int>(
-                                selector: (context, cart) =>
-                                    cart.items[productId]?.quantity ?? 0,
-                                builder: (context, currentQty, child) {
-                                  return ProductCard(
-                                    key: ValueKey('product_$productId'),
-                                    id: productId,
-                                    name: productName,
-                                    price: productPrice,
-                                    marketPrice: marketPrice,
-                                    unit: productUnit,
-                                    imageUrl: imageUrl,
-                                    stock: productStock,
-                                    merchantId: merchantId,
-                                    category: category,
-                                    description: description,
-                                    quantityInCart: currentQty,
-                                    onAdd: () {
-                                      context.read<CartProvider>().addItem(
-                                            id: productId,
-                                            name: productName,
-                                            price: productPrice,
-                                            unit: productUnit,
-                                            imageUrl: imageUrl,
-                                          );
-                                    },
-                                    onRemove: () {
-                                      context
-                                          .read<CartProvider>()
-                                          .removeSingleItem(productId);
-                                    },
-                                  );
-                                },
+                              return _buildProductCardFromDoc(
+                                filteredDocs[index],
+                                keyPrefix: 'main',
                               );
                             },
                             childCount: filteredDocs.length,
@@ -581,8 +591,94 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
+
+                      // Endless / Infinite Category & Discovery Stream as user scrolls down
+                      SliverToBoxAdapter(
+                        child: Column(
+                          children: List.generate(_endlessBatchCount, (batchIdx) {
+                            final group = SmartRecommendationEngine
+                                .generateEndlessSection(
+                              batchIndex: batchIdx,
+                              allDocs: filteredDocs,
+                            );
+                            if (group.products.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 18, 12, 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: group.bgTint,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          group.icon,
+                                          color: group.accentColor,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                group.title,
+                                                style: TextStyle(
+                                                  fontSize: 14.5,
+                                                  fontWeight: FontWeight.w900,
+                                                  color: group.accentColor,
+                                                ),
+                                              ),
+                                              Text(
+                                                group.subtitle,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFF475569),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: group.products.length,
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      childAspectRatio: 0.63,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                    ),
+                                    itemBuilder: (context, idx) {
+                                      return _buildProductCardFromDoc(
+                                        group.products[idx],
+                                        keyPrefix: 'endless_${batchIdx}_$idx',
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
                     const SliverToBoxAdapter(
-                      child: SizedBox(height: 24),
+                      child: SizedBox(height: 28),
                     ),
                   ],
                 );
@@ -619,10 +715,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Live Active Order Tracker Pill (Swiggy/Zomato Style) on Home tab
           if (safeIndex == 0) const ActiveOrderFloatingBanner(),
-
-          // Persistent Sticky Cart Bar whenever items are in cart (on Home tab)
           if (safeIndex == 0)
             Selector<CartProvider, int>(
               selector: (context, cart) => cart.totalQuantity,
@@ -643,7 +736,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-
           CustomBottomNavBar(
             currentIndex: safeIndex,
             onTap: (index) {

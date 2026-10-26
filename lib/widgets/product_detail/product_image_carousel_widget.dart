@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class ProductImageCarouselWidget extends StatefulWidget {
@@ -32,30 +33,32 @@ class ProductImageCarouselWidget extends StatefulWidget {
 class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget> {
   final PageController _pageController = PageController();
   int _currentSlide = 0;
-  Timer? _countdownTimer;
-  Duration _remainingSaleTime = const Duration(
-    days: 8,
-    hours: 1,
-    minutes: 2,
-    seconds: 44,
-  );
 
   late final List<_SlideSpec> _slides;
+  // Cache decoded Base64 bytes once so Image.memory never reloads or blinks
+  final Map<String, Uint8List> _base64Cache = {};
 
   @override
   void initState() {
     super.initState();
     _slides = _buildSlidesList();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        if (_remainingSaleTime.inSeconds > 0) {
-          _remainingSaleTime -= const Duration(seconds: 1);
-        } else {
-          _remainingSaleTime = const Duration(hours: 4, minutes: 30);
-        }
-      });
-    });
+    _precacheBase64Images();
+  }
+
+  void _precacheBase64Images() {
+    for (final slide in _slides) {
+      final String img = slide.imageUrl.trim();
+      if (img.isNotEmpty &&
+          !img.startsWith('http://') &&
+          !img.startsWith('https://') &&
+          !_base64Cache.containsKey(img)) {
+        try {
+          final String cleanBase64 =
+              img.contains(',') ? img.split(',').last : img;
+          _base64Cache[img] = base64Decode(cleanBase64.trim());
+        } catch (_) {}
+      }
+    }
   }
 
   List<_SlideSpec> _buildSlidesList() {
@@ -111,13 +114,13 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
 
   Widget _buildRawImage(String imageStr, {double iconSize = 80}) {
-    if (imageStr.trim().isEmpty) {
+    final String trimmed = imageStr.trim();
+    if (trimmed.isEmpty) {
       return Icon(
         Icons.shopping_bag_outlined,
         size: iconSize,
@@ -125,32 +128,39 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
       );
     }
 
-    if (!imageStr.startsWith('http://') && !imageStr.startsWith('https://')) {
-      try {
-        final cleanBase64 =
-            imageStr.contains(',') ? imageStr.split(',').last : imageStr;
-        final bytes = base64Decode(cleanBase64.trim());
-        return Image.memory(
-          bytes,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => Icon(
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      Uint8List? bytes = _base64Cache[trimmed];
+      if (bytes == null) {
+        try {
+          final String cleanBase64 =
+              trimmed.contains(',') ? trimmed.split(',').last : trimmed;
+          bytes = base64Decode(cleanBase64.trim());
+          _base64Cache[trimmed] = bytes;
+        } catch (_) {
+          return Icon(
             Icons.shopping_bag_outlined,
             size: iconSize,
             color: Colors.green.shade200,
-          ),
-        );
-      } catch (_) {
-        return Icon(
+          );
+        }
+      }
+
+      return Image.memory(
+        bytes,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => Icon(
           Icons.shopping_bag_outlined,
           size: iconSize,
           color: Colors.green.shade200,
-        );
-      }
+        ),
+      );
     }
 
     return Image.network(
-      imageStr,
+      trimmed,
       fit: BoxFit.contain,
+      gaplessPlayback: true,
       errorBuilder: (context, error, stackTrace) => Icon(
         Icons.shopping_bag_outlined,
         size: iconSize,
@@ -245,11 +255,6 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
 
   @override
   Widget build(BuildContext context) {
-    final int days = _remainingSaleTime.inDays;
-    final int hours = _remainingSaleTime.inHours % 24;
-    final int mins = _remainingSaleTime.inMinutes % 60;
-    final int secs = _remainingSaleTime.inSeconds % 60;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -295,72 +300,8 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
           ),
         ),
 
-        // 2. SALE COUNTDOWN TIMER STRIP (Screenshot 1)
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFEF08A), Color(0xFFFDE047), Color(0xFFFACC15)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  widget.discountPercent > 0
-                      ? 'UP TO ${widget.discountPercent}% OFF'
-                      : 'FLASH DEAL',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  const Text(
-                    'Sale Ends in ',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  _buildTimeBox(days.toString().padLeft(2, '0')),
-                  const Text(
-                    ' d : ',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  _buildTimeBox(hours.toString().padLeft(2, '0')),
-                  const Text(
-                    ' h : ',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  _buildTimeBox(mins.toString().padLeft(2, '0')),
-                  const Text(
-                    ' m : ',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                  _buildTimeBox(secs.toString().padLeft(2, '0')),
-                  const Text(
-                    ' s',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+        // 2. ISOLATED SALE COUNTDOWN TIMER STRIP (Rebuilds ONLY the timer boxes, never the images!)
+        _SaleCountdownBanner(discountPercent: widget.discountPercent),
 
         // 3. SWIPEABLE MULTI-SLIDE PRODUCT IMAGE SHOWCASE CARD
         Container(
@@ -485,7 +426,7 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
                     ),
                   ),
 
-                // Bottom-Left Product Code Pill (like s-691714525 in Screenshot 1)
+                // Bottom-Left Product Code Pill
                 Positioned(
                   bottom: 38,
                   left: 12,
@@ -499,7 +440,7 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
                   ),
                 ),
 
-                // Bottom-Right Gallery / Zoom Floating Button (Screenshot 1)
+                // Bottom-Right Gallery / Zoom Floating Button
                 Positioned(
                   bottom: 34,
                   right: 12,
@@ -703,6 +644,48 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
       ),
     );
   }
+}
+
+/// Standalone countdown banner widget so 1-second timer updates ONLY rebuild the timer text,
+/// preventing any rebuild or blinking of the product images.
+class _SaleCountdownBanner extends StatefulWidget {
+  final int discountPercent;
+
+  const _SaleCountdownBanner({required this.discountPercent});
+
+  @override
+  State<_SaleCountdownBanner> createState() => _SaleCountdownBannerState();
+}
+
+class _SaleCountdownBannerState extends State<_SaleCountdownBanner> {
+  Timer? _timer;
+  Duration _remaining = const Duration(
+    days: 8,
+    hours: 1,
+    minutes: 2,
+    seconds: 44,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_remaining.inSeconds > 0) {
+          _remaining -= const Duration(seconds: 1);
+        } else {
+          _remaining = const Duration(hours: 4, minutes: 30);
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   Widget _buildTimeBox(String val) {
     return Container(
@@ -718,6 +701,80 @@ class _ProductImageCarouselWidgetState extends State<ProductImageCarouselWidget>
           fontSize: 10.5,
           fontWeight: FontWeight.w900,
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int days = _remaining.inDays;
+    final int hours = _remaining.inHours % 24;
+    final int mins = _remaining.inMinutes % 60;
+    final int secs = _remaining.inSeconds % 60;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFEF08A), Color(0xFFFDE047), Color(0xFFFACC15)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDC2626),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              widget.discountPercent > 0
+                  ? 'UP TO ${widget.discountPercent}% OFF'
+                  : 'FLASH DEAL',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              const Text(
+                'Sale Ends in ',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E293B),
+                ),
+              ),
+              _buildTimeBox(days.toString().padLeft(2, '0')),
+              const Text(
+                ' d : ',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              _buildTimeBox(hours.toString().padLeft(2, '0')),
+              const Text(
+                ' h : ',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              _buildTimeBox(mins.toString().padLeft(2, '0')),
+              const Text(
+                ' m : ',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+              _buildTimeBox(secs.toString().padLeft(2, '0')),
+              const Text(
+                ' s',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

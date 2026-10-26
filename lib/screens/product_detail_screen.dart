@@ -23,9 +23,35 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  final ScrollController _scrollController = ScrollController();
   bool _isWishlisted = false;
   int _selectedPackMultiplier = 1;
   String _deliveryLocation = 'Nellore - 524004';
+  int _endlessBatchesCount = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    if (maxScroll - currentScroll <= 420) {
+      setState(() {
+        _endlessBatchesCount += 2;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _toggleWishlist(String productName) {
     setState(() => _isWishlisted = !_isWishlisted);
@@ -49,7 +75,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     Clipboard.setData(ClipboardData(text: shareText));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Product share details copied! Ready to paste on WhatsApp.'),
+        content:
+            Text('Product share details copied! Ready to paste on WhatsApp.'),
         backgroundColor: Color(0xFF00875A),
       ),
     );
@@ -142,7 +169,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
-      // TOP APP BAR WITH SEARCH, WISHLIST & LIVE CART BADGE (Screenshot 1)
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -221,6 +247,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollController,
               physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +284,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     },
                   ),
 
-                  // 3. RATINGS BREAKDOWN, REAL PHOTOS, REVIEWS, TRUST STRIP & PEOPLE ALSO VIEWED
+                  // 3. REAL-TIME PHOTO REVIEWS + SMART RELATED PRODUCTS + CATEGORY & ENDLESS FEED
                   ProductReviewsAndSimilarSection(
                     productId: widget.productId,
                     productName: name,
@@ -265,13 +292,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     primaryImageUrl: imageUrl,
                     deliveryLocation: _deliveryLocation,
                     onChangeLocationTap: _changeDeliveryLocationDialog,
+                    endlessBatchesCount: _endlessBatchesCount,
                   ),
                 ],
               ),
             ),
           ),
 
-          // 4. STICKY DUAL-BUTTON BOTTOM BAR ([Add to Cart] + [Buy Now]) (Screenshots 1-4)
+          // 4. STICKY DUAL-BUTTON BOTTOM BAR ([Add to Cart] + [Buy Now])
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: const BoxDecoration(
@@ -314,7 +342,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                   return Row(
                     children: [
-                      // Left Button: Outlined Add to Cart OR Quantity Stepper
                       Expanded(
                         child: currentQty == 0
                             ? SizedBox(
@@ -346,7 +373,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                       SnackBar(
                                         content: Text('$name added to Cart!'),
                                         duration: const Duration(seconds: 1),
-                                        backgroundColor: const Color(0xFF00875A),
+                                        backgroundColor:
+                                            const Color(0xFF00875A),
                                       ),
                                     );
                                   },
@@ -411,8 +439,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ),
                       ),
                       const SizedBox(width: 12),
-
-                      // Right Button: Solid Buy Now (Adds & Navigates to Checkout)
                       Expanded(
                         child: SizedBox(
                           height: 46,
