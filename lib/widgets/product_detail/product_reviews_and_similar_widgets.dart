@@ -1,12 +1,10 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/cart_provider.dart';
-import '../../screens/product_detail_screen.dart';
 import '../../services/smart_recommendation_engine.dart';
+import '../product_card.dart';
 import 'realtime_reviews_widget.dart';
 
 class ProductReviewsAndSimilarSection extends StatefulWidget {
@@ -36,58 +34,6 @@ class ProductReviewsAndSimilarSection extends StatefulWidget {
 
 class _ProductReviewsAndSimilarSectionState
     extends State<ProductReviewsAndSimilarSection> {
-  final Map<String, Uint8List> _base64Cache = {};
-
-  Widget _buildProductImage(String imageStr, {BoxFit fit = BoxFit.contain}) {
-    final String trimmed = imageStr.trim();
-    if (trimmed.isEmpty) {
-      return Icon(
-        Icons.shopping_bag_outlined,
-        size: 40,
-        color: Colors.green.shade200,
-      );
-    }
-
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      Uint8List? bytes = _base64Cache[trimmed];
-      if (bytes == null) {
-        try {
-          final String cleanBase64 =
-              trimmed.contains(',') ? trimmed.split(',').last : trimmed;
-          bytes = base64Decode(cleanBase64.trim());
-          _base64Cache[trimmed] = bytes;
-        } catch (_) {
-          return Icon(
-            Icons.shopping_bag_outlined,
-            size: 40,
-            color: Colors.green.shade200,
-          );
-        }
-      }
-      return Image.memory(
-        bytes,
-        fit: fit,
-        gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.shopping_bag_outlined,
-          size: 40,
-          color: Colors.green.shade200,
-        ),
-      );
-    }
-
-    return Image.network(
-      trimmed,
-      fit: fit,
-      gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) => Icon(
-        Icons.shopping_bag_outlined,
-        size: 40,
-        color: Colors.green.shade200,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -201,7 +147,7 @@ class _ProductReviewsAndSimilarSectionState
         ),
         const SizedBox(height: 8),
 
-        // 3. SMART RELATED PRODUCTS + COOKING COMPANIONS + CATEGORY-WISE + ENDLESS SCROLL
+        // 3. SMART RELATED PRODUCTS + COOKING COMPANIONS + CATEGORY-WISE + ENDLESS SCROLL (ALL USING IMAGE 3 PRODUCT CARDS)
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('products').snapshots(),
           builder: (context, snapshot) {
@@ -218,7 +164,7 @@ class _ProductReviewsAndSimilarSectionState
               currentName: widget.productName,
               currentCategory: widget.category,
               allDocs: allDocs,
-            ).take(8).toList();
+            ).take(9).toList();
 
             // B. Cooking & Daily Companion Products
             final List<QueryDocumentSnapshot> cookingDocs =
@@ -226,7 +172,7 @@ class _ProductReviewsAndSimilarSectionState
               currentProductId: widget.productId,
               currentName: widget.productName,
               allDocs: allDocs,
-            ).take(8).toList();
+            ).take(9).toList();
 
             // C. Category-wise Grouped Sections
             final List<CategorySectionGroup> categoryGroups =
@@ -238,7 +184,7 @@ class _ProductReviewsAndSimilarSectionState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // SECTION A: SIMILAR & RELATED BRANDS (Horizontal Carousel with ADD Buttons)
+                // SECTION A: SIMILAR & RELATED BRANDS (Horizontal Carousel with Image 3 Cards)
                 if (relatedDocs.isNotEmpty)
                   _buildHorizontalRelatedCarousel(
                     title: 'Similar & Related Products',
@@ -259,18 +205,18 @@ class _ProductReviewsAndSimilarSectionState
                     docs: cookingDocs,
                   ),
 
-                // SECTION C: CATEGORY-WISE SECTIONS AS USER SCROLLS
+                // SECTION C: CATEGORY-WISE SECTIONS AS USER SCROLLS (3-Column Image 3 Grid)
                 ...categoryGroups.map((group) {
                   return _buildCategoryGridSection(
                     title: group.title,
                     subtitle: group.subtitle,
                     accentColor: group.accentColor,
                     bgTint: group.bgTint,
-                    docs: group.products.take(4).toList(),
+                    docs: group.products.take(6).toList(),
                   );
                 }),
 
-                // SECTION D: ENDLESS / INFINITE SCROLL DISCOVERY BATCHES
+                // SECTION D: ENDLESS / INFINITE SCROLL DISCOVERY BATCHES (3-Column Image 3 Grid)
                 ...List.generate(widget.endlessBatchesCount, (batchIdx) {
                   final endlessGroup =
                       SmartRecommendationEngine.generateEndlessSection(
@@ -392,14 +338,14 @@ class _ProductReviewsAndSimilarSectionState
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 238,
+            height: 226,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: docs.length,
               itemBuilder: (context, idx) {
                 return SizedBox(
-                  width: 158,
+                  width: 122,
                   child: Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: _buildInteractiveProductCard(docs[idx]),
@@ -425,7 +371,7 @@ class _ProductReviewsAndSimilarSectionState
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 16),
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,10 +418,10 @@ class _ProductReviewsAndSimilarSectionState
             physics: const NeverScrollableScrollPhysics(),
             itemCount: docs.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.59,
+              crossAxisCount: 3,
+              childAspectRatio: 0.48,
               crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+              mainAxisSpacing: 14,
             ),
             itemBuilder: (context, index) {
               return _buildInteractiveProductCard(docs[index]);
@@ -486,326 +432,52 @@ class _ProductReviewsAndSimilarSectionState
     );
   }
 
-  /// Product card with Mall badge, Special Offer price, AND direct ADD / + - button
+  /// Uses the unified Image 3 ProductCard design everywhere on the Product Detail screen
   Widget _buildInteractiveProductCard(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final String pId = doc.id;
     final String pName = (data['name'] ?? data['title'] ?? 'Product').toString();
     final double pPrice = ((data['price'] ?? 0) as num).toDouble();
     final double pMarketPrice =
-        ((data['marketPrice'] ?? (pPrice + 15)) as num).toDouble();
+        ((data['marketPrice'] ?? pPrice) as num).toDouble();
     final String pUnit =
         (data['unit'] ?? data['weight'] ?? '1 unit').toString();
     final String pImg =
         (data['imageBase64'] ?? data['imageUrl'] ?? data['image'] ?? '')
             .toString();
     final int pStock = ((data['stock'] ?? 1) as num).toInt();
-    final bool isOutOfStock = pStock <= 0;
-
-    int disc = 0;
-    if (pMarketPrice > pPrice && pMarketPrice > 0) {
-      disc = (((pMarketPrice - pPrice) / pMarketPrice) * 100).round();
-    }
-    final int specialOffer = (pPrice - 8).clamp(1, pPrice).round();
+    final String pMerchantId = (data['merchantId'] ?? '').toString();
+    final String pCategory =
+        (data['category'] ?? widget.category).toString();
+    final String pDesc = (data['description'] ?? '').toString();
 
     return Selector<CartProvider, int>(
       selector: (context, cart) => cart.items[pId]?.quantity ?? 0,
       builder: (context, currentQty, child) {
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProductDetailScreen(
-                  productId: pId,
-                  productData: {
-                    'name': pName,
-                    'price': pPrice,
-                    'marketPrice': pMarketPrice,
-                    'unit': pUnit,
-                    'imageUrl': pImg,
-                    'stock': pStock,
-                    'merchantId': data['merchantId'] ?? '',
-                    'category': data['category'] ?? widget.category,
-                    'description': data['description'] ?? '',
-                  },
-                ),
-              ),
-            );
+        return ProductCard(
+          id: pId,
+          name: pName,
+          price: pPrice,
+          marketPrice: pMarketPrice,
+          unit: pUnit,
+          imageUrl: pImg,
+          stock: pStock,
+          merchantId: pMerchantId,
+          category: pCategory,
+          description: pDesc,
+          quantityInCart: currentQty,
+          onAdd: () {
+            context.read<CartProvider>().addItem(
+                  id: pId,
+                  name: pName,
+                  price: pPrice,
+                  unit: pUnit,
+                  imageUrl: pImg,
+                );
           },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: currentQty > 0
-                    ? const Color(0xFF00875A)
-                    : const Color(0xFFE2E8F0),
-                width: currentQty > 0 ? 1.5 : 1,
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x08000000),
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Container(
-                        color: const Color(0xFFF8FAFC),
-                        padding: const EdgeInsets.all(8),
-                        child: _buildProductImage(pImg),
-                      ),
-                      if (disc > 0)
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3,
-                            ),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFDC2626),
-                              borderRadius: BorderRadius.only(
-                                bottomRight: Radius.circular(10),
-                              ),
-                            ),
-                            child: Text(
-                              '$disc% OFF',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1.5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6D28D9),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.verified_rounded,
-                                  size: 9,
-                                  color: Colors.white,
-                                ),
-                                SizedBox(width: 2),
-                                Text(
-                                  'Mall',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              pUnit,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        pName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '₹$specialOffer with Special Offer',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF00875A),
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-
-                      // Price + Direct ADD / + - Stepper Row
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '₹${pPrice.toInt()}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              if (disc > 0)
-                                Text(
-                                  '₹${pMarketPrice.toInt()}',
-                                  style: const TextStyle(
-                                    fontSize: 9.5,
-                                    color: Color(0xFF94A3B8),
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          isOutOfStock
-                              ? const Text(
-                                  'NO STOCK',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : currentQty == 0
-                                  ? SizedBox(
-                                      height: 28,
-                                      width: 58,
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              const Color(0xFFF0FDF4),
-                                          foregroundColor:
-                                              const Color(0xFF00875A),
-                                          elevation: 0,
-                                          padding: EdgeInsets.zero,
-                                          side: const BorderSide(
-                                            color: Color(0xFF00875A),
-                                            width: 1.3,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(7),
-                                          ),
-                                        ),
-                                        onPressed: () {
-                                          context.read<CartProvider>().addItem(
-                                                id: pId,
-                                                name: pName,
-                                                price: pPrice,
-                                                unit: pUnit,
-                                                imageUrl: pImg,
-                                              );
-                                        },
-                                        child: const Text(
-                                          'ADD',
-                                          style: TextStyle(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : Container(
-                                      height: 28,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF00875A),
-                                        borderRadius: BorderRadius.circular(7),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          InkWell(
-                                            onTap: () => context
-                                                .read<CartProvider>()
-                                                .removeSingleItem(pId),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 5,
-                                              ),
-                                              child: Icon(
-                                                Icons.remove,
-                                                size: 13,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                          Text(
-                                            '$currentQty',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          InkWell(
-                                            onTap: () => context
-                                                .read<CartProvider>()
-                                                .addItem(
-                                                  id: pId,
-                                                  name: pName,
-                                                  price: pPrice,
-                                                  unit: pUnit,
-                                                  imageUrl: pImg,
-                                                ),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 5,
-                                              ),
-                                              child: Icon(
-                                                Icons.add,
-                                                size: 13,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          onRemove: () {
+            context.read<CartProvider>().removeSingleItem(pId);
+          },
         );
       },
     );

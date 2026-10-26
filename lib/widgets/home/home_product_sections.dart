@@ -1,12 +1,10 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/cart_provider.dart';
-import '../../screens/product_detail_screen.dart';
 import '../../services/smart_recommendation_engine.dart';
+import '../product_card.dart';
 
 class HomeProductSections extends StatelessWidget {
   final List<QueryDocumentSnapshot> allDocs;
@@ -34,7 +32,7 @@ class HomeProductSections extends StatelessWidget {
     final List<QueryDocumentSnapshot> recommendedDocs = [
       ...inStockDocs.where((d) => !cartProductIds.contains(d.id)),
       ...inStockDocs.where((d) => cartProductIds.contains(d.id)),
-    ].take(8).toList();
+    ].take(9).toList();
 
     final List<QueryDocumentSnapshot> flashDealDocs = inStockDocs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
@@ -42,7 +40,7 @@ class HomeProductSections extends StatelessWidget {
       final double marketPrice =
           ((data['marketPrice'] ?? price) as num).toDouble();
       return marketPrice > price && price > 0;
-    }).take(8).toList();
+    }).take(9).toList();
 
     // Category-wise sections (Milk/Curd/Dairy, Vegetables & Fruits, Cooking & Grocery, etc.)
     final List<CategorySectionGroup> categorySections =
@@ -57,7 +55,7 @@ class HomeProductSections extends StatelessWidget {
             subtitle: 'Handpicked fresh essentials • 15 mins delivery',
             badgeText: 'TOP PICKS',
             badgeColor: const Color(0xFF00875A),
-            headerBgGradient: const [Color(0xFFF0FDF4), Color(0xFFF8FAFC)],
+            headerBgGradient: const [Color(0xFFF0FDF4), Colors.white],
             docs: recommendedDocs,
             onCartUpdated: onCartUpdated,
             isFlashDeal: false,
@@ -68,19 +66,19 @@ class HomeProductSections extends StatelessWidget {
             subtitle: 'Biggest price drops on daily groceries',
             badgeText: 'HOT DEALS',
             badgeColor: const Color(0xFFDC2626),
-            headerBgGradient: const [Color(0xFFFEF2F2), Color(0xFFF8FAFC)],
+            headerBgGradient: const [Color(0xFFFEF2F2), Colors.white],
             docs: flashDealDocs,
             onCartUpdated: onCartUpdated,
             isFlashDeal: true,
           ),
-        // Category-wise Horizontal Carousels on Home Screen
+        // Category-wise Horizontal Carousels on Home Screen using Image 3 ProductCard
         ...categorySections.map((group) {
           return _HorizontalProductSection(
             title: group.title,
             subtitle: group.subtitle,
             badgeText: 'CATEGORY',
             badgeColor: group.accentColor,
-            headerBgGradient: [group.bgTint, const Color(0xFFF8FAFC)],
+            headerBgGradient: [group.bgTint, Colors.white],
             docs: group.products.take(10).toList(),
             onCartUpdated: onCartUpdated,
             isFlashDeal: false,
@@ -115,7 +113,7 @@ class _HorizontalProductSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 6),
+      margin: const EdgeInsets.only(top: 10, bottom: 4),
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -192,9 +190,9 @@ class _HorizontalProductSection extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 222,
+            height: 226,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -222,373 +220,51 @@ class _HorizontalProductSection extends StatelessWidget {
                 final String description =
                     (data['description'] ?? '').toString();
 
-                return Selector<CartProvider, int>(
-                  selector: (context, cart) =>
-                      cart.items[productId]?.quantity ?? 0,
-                  builder: (context, qty, child) {
-                    return _CompactHorizontalProductCard(
-                      id: productId,
-                      name: name,
-                      price: price,
-                      marketPrice: marketPrice,
-                      unit: unit,
-                      imageUrl: imageUrl,
-                      stock: stock,
-                      merchantId: merchantId,
-                      category: category,
-                      description: description,
-                      quantityInCart: qty,
-                      isFlashDeal: isFlashDeal,
-                      onAdd: () {
-                        context.read<CartProvider>().addItem(
-                              id: productId,
-                              name: name,
-                              price: price,
-                              unit: unit,
-                              imageUrl: imageUrl,
-                            );
-                        onCartUpdated();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: SizedBox(
+                    width: 116,
+                    child: Selector<CartProvider, int>(
+                      selector: (context, cart) =>
+                          cart.items[productId]?.quantity ?? 0,
+                      builder: (context, qty, child) {
+                        return ProductCard(
+                          id: productId,
+                          name: name,
+                          price: price,
+                          marketPrice: marketPrice,
+                          unit: unit,
+                          imageUrl: imageUrl,
+                          stock: stock,
+                          merchantId: merchantId,
+                          category: category,
+                          description: description,
+                          quantityInCart: qty,
+                          onAdd: () {
+                            context.read<CartProvider>().addItem(
+                                  id: productId,
+                                  name: name,
+                                  price: price,
+                                  unit: unit,
+                                  imageUrl: imageUrl,
+                                );
+                            onCartUpdated();
+                          },
+                          onRemove: () {
+                            context
+                                .read<CartProvider>()
+                                .removeSingleItem(productId);
+                            onCartUpdated();
+                          },
+                        );
                       },
-                      onRemove: () {
-                        context.read<CartProvider>().removeSingleItem(productId);
-                        onCartUpdated();
-                      },
-                    );
-                  },
+                    ),
+                  ),
                 );
               },
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CompactHorizontalProductCard extends StatelessWidget {
-  final String id;
-  final String name;
-  final double price;
-  final double marketPrice;
-  final String unit;
-  final String imageUrl;
-  final int stock;
-  final String merchantId;
-  final String category;
-  final String description;
-  final int quantityInCart;
-  final bool isFlashDeal;
-  final VoidCallback onAdd;
-  final VoidCallback onRemove;
-
-  static final Map<String, Uint8List> _sharedBase64Cache = {};
-
-  const _CompactHorizontalProductCard({
-    required this.id,
-    required this.name,
-    required this.price,
-    required this.marketPrice,
-    required this.unit,
-    required this.imageUrl,
-    required this.stock,
-    required this.merchantId,
-    required this.category,
-    required this.description,
-    required this.quantityInCart,
-    required this.isFlashDeal,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  Widget _buildImage(String imageStr) {
-    final String trimmed = imageStr.trim();
-    if (trimmed.isEmpty) {
-      return Icon(
-        Icons.shopping_bag_outlined,
-        size: 40,
-        color: Colors.green.shade200,
-      );
-    }
-
-    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-      Uint8List? bytes = _sharedBase64Cache[trimmed];
-      if (bytes == null) {
-        try {
-          final cleanBase64 =
-              trimmed.contains(',') ? trimmed.split(',').last : trimmed;
-          bytes = base64Decode(cleanBase64.trim());
-          _sharedBase64Cache[trimmed] = bytes;
-        } catch (_) {
-          return Icon(
-            Icons.shopping_bag_outlined,
-            size: 40,
-            color: Colors.green.shade200,
-          );
-        }
-      }
-      return Image.memory(
-        bytes,
-        fit: BoxFit.contain,
-        gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) => Icon(
-          Icons.shopping_bag_outlined,
-          size: 40,
-          color: Colors.green.shade200,
-        ),
-      );
-    }
-
-    return Image.network(
-      trimmed,
-      fit: BoxFit.contain,
-      gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) => Icon(
-        Icons.shopping_bag_outlined,
-        size: 40,
-        color: Colors.green.shade200,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    int discountPercent = 0;
-    if (marketPrice > price && marketPrice > 0) {
-      discountPercent = (((marketPrice - price) / marketPrice) * 100).round();
-    }
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailScreen(
-              productId: id,
-              productData: {
-                'name': name,
-                'price': price,
-                'marketPrice': marketPrice,
-                'unit': unit,
-                'imageUrl': imageUrl,
-                'stock': stock,
-                'merchantId': merchantId,
-                'category': category,
-                'description': description,
-              },
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: 148,
-        margin: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isFlashDeal
-                ? const Color(0xFFFECACA)
-                : const Color(0xFFE2E8F0),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0A000000),
-              blurRadius: 8,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(child: _buildImage(imageUrl)),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.bolt_rounded,
-                        size: 12,
-                        color: Color(0xFF00875A),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        isFlashDeal ? 'FAST DEAL' : '15 MINS',
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF00875A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  Text(
-                    unit,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: Color(0xFF64748B),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '₹${price.toInt()}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          if (marketPrice > price)
-                            Text(
-                              '₹${marketPrice.toInt()}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Color(0xFF94A3B8),
-                                decoration: TextDecoration.lineThrough,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                        ],
-                      ),
-                      quantityInCart == 0
-                          ? SizedBox(
-                              height: 30,
-                              width: 58,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFF0FDF4),
-                                  foregroundColor: const Color(0xFF00875A),
-                                  elevation: 0,
-                                  padding: EdgeInsets.zero,
-                                  side: const BorderSide(
-                                    color: Color(0xFF00875A),
-                                    width: 1.4,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                onPressed: onAdd,
-                                child: const Text(
-                                  'ADD',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : Container(
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF00875A),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  InkWell(
-                                    onTap: onRemove,
-                                    child: const Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(horizontal: 5),
-                                      child: Icon(
-                                        Icons.remove,
-                                        size: 13,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                  Text(
-                                    '$quantityInCart',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 11.5,
-                                    ),
-                                  ),
-                                  InkWell(
-                                    onTap: onAdd,
-                                    child: const Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(horizontal: 5),
-                                      child: Icon(
-                                        Icons.add,
-                                        size: 13,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (discountPercent > 0)
-              Positioned(
-                top: 0,
-                left: 0,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isFlashDeal
-                        ? const Color(0xFFDC2626)
-                        : const Color(0xFF2563EB),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(15),
-                      bottomRight: Radius.circular(10),
-                    ),
-                  ),
-                  child: Text(
-                    '$discountPercent% OFF',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -602,57 +278,31 @@ class HomeProductSkeletonGrid extends StatelessWidget {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: 4,
+      itemCount: 6,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.63,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisCount: 3,
+        childAspectRatio: 0.48,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 14,
       ),
       itemBuilder: (context, index) {
-        return Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 132,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(height: 10),
-              Container(height: 12, width: 100, color: const Color(0xFFF1F5F9)),
-              const SizedBox(height: 6),
-              Container(height: 10, width: 60, color: const Color(0xFFF1F5F9)),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    height: 16,
-                    width: 45,
-                    color: const Color(0xFFF1F5F9),
-                  ),
-                  Container(
-                    height: 30,
-                    width: 60,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Container(height: 14, width: 45, color: const Color(0xFFF1F5F9)),
+            const SizedBox(height: 6),
+            Container(height: 11, width: 90, color: const Color(0xFFF1F5F9)),
+            const SizedBox(height: 4),
+            Container(height: 10, width: 55, color: const Color(0xFFF1F5F9)),
+          ],
         );
       },
     );

@@ -17,23 +17,17 @@ class AddressSelectionBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<AddressSelectionBottomSheet> createState() =>
-      _AddressSelectionBottomSheetState();
+  State<AddressSelectionBottomSheet> createState() => _AddressSelectionBottomSheetState();
 }
 
-class _AddressSelectionBottomSheetState
-    extends State<AddressSelectionBottomSheet> {
+class _AddressSelectionBottomSheetState extends State<AddressSelectionBottomSheet> {
   late TextEditingController _liveLocationController;
   bool _isDetecting = false;
 
   @override
   void initState() {
     super.initState();
-    _liveLocationController = TextEditingController(
-      text: widget.initialGpsAddress.isNotEmpty
-          ? widget.initialGpsAddress
-          : LocationService.defaultNelloreAddress,
-    );
+    _liveLocationController = TextEditingController(text: widget.initialGpsAddress);
   }
 
   @override
@@ -42,6 +36,7 @@ class _AddressSelectionBottomSheetState
     super.dispose();
   }
 
+  // Live Location రీ-డిటెక్ట్ చేసే ఫంక్షన్
   Future<void> _redetectLocation() async {
     setState(() => _isDetecting = true);
     final freshAddress = await LocationService.getCurrentAddress();
@@ -53,30 +48,32 @@ class _AddressSelectionBottomSheetState
     }
   }
 
+  // Home, Work, Other అడ్రస్ యాడ్ చేసే మోడల్ డైలాగ్ (KEYBOARD FIXED HERE)
   void _showAddAddressDialog(String defaultTag) {
-    final houseNoController = TextEditingController(text: '5/523');
-    final areaController = TextEditingController(
-      text: 'Podalakur Rd, Telugu Ganga Colony, Nellore - 524004',
-    );
+    final houseNoController = TextEditingController();
+    final areaController = TextEditingController(text: _liveLocationController.text);
     final landmarkController = TextEditingController();
     String selectedTag = defaultTag;
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
+      isScrollControlled: true, // కీబోర్డ్ కోసం షీట్ పైకి జరగడానికి అవసరం
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // కీబోర్డ్ సైజ్ తెలుసుకోవడం
             final keyboardPadding = MediaQuery.of(ctx).viewInsets.bottom;
 
             return Padding(
-              padding: EdgeInsets.only(bottom: keyboardPadding),
+              padding: EdgeInsets.only(
+                bottom: keyboardPadding, // కీబోర్డ్ పొడవుకి తగ్గట్టుగా బాటమ్ ప్యాడింగ్
+              ),
               child: Container(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.85, // స్క్రీన్ ఎత్తులో 85% దాటకుండా
                 ),
                 padding: const EdgeInsets.all(16.0),
                 child: SingleChildScrollView(
@@ -89,10 +86,7 @@ class _AddressSelectionBottomSheetState
                         children: [
                           Text(
                             'Save Address as $selectedTag',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                           IconButton(
                             icon: const Icon(Icons.close),
@@ -104,7 +98,7 @@ class _AddressSelectionBottomSheetState
                       TextField(
                         controller: houseNoController,
                         decoration: const InputDecoration(
-                          labelText: 'House / Flat / Door No. *',
+                          labelText: 'House / Flat / Floor / Building No. *',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
@@ -122,7 +116,7 @@ class _AddressSelectionBottomSheetState
                       TextField(
                         controller: landmarkController,
                         decoration: const InputDecoration(
-                          labelText: 'Landmark (Optional)',
+                          labelText: 'Landmark (Optional e.g. Near Water Tank)',
                           border: OutlineInputBorder(),
                           isDense: true,
                         ),
@@ -136,13 +130,9 @@ class _AddressSelectionBottomSheetState
                             child: ChoiceChip(
                               label: Text(tag),
                               selected: isSelected,
-                              selectedColor: const Color(0xFFC81E45),
-                              labelStyle: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              onSelected: (val) =>
-                                  setModalState(() => selectedTag = tag),
+                              selectedColor: const Color(0xFF00875A),
+                              labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+                              onSelected: (val) => setModalState(() => selectedTag = tag),
                             ),
                           );
                         }).toList(),
@@ -150,24 +140,18 @@ class _AddressSelectionBottomSheetState
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        height: 46,
+                        height: 45,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFC81E45),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                            backgroundColor: const Color(0xFF00875A),
                           ),
                           onPressed: () {
-                            if (houseNoController.text.trim().isEmpty ||
-                                areaController.text.trim().isEmpty) {
+                            if (houseNoController.text.trim().isEmpty || areaController.text.trim().isEmpty) {
                               return;
                             }
 
                             final newAddress = UserAddress(
-                              id: DateTime.now()
-                                  .millisecondsSinceEpoch
-                                  .toString(),
+                              id: DateTime.now().millisecondsSinceEpoch.toString(),
                               title: selectedTag,
                               houseNo: houseNoController.text.trim(),
                               area: areaController.text.trim(),
@@ -175,21 +159,12 @@ class _AddressSelectionBottomSheetState
                             );
 
                             widget.onAddressSaved(newAddress);
-                            widget.onAddressSelected(
-                              newAddress.title,
-                              newAddress.fullAddress,
-                            );
+                            widget.onAddressSelected(newAddress.title, newAddress.fullAddress);
 
                             Navigator.pop(ctx);
                             Navigator.pop(context);
                           },
-                          child: const Text(
-                            'SAVE & DELIVER HERE',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: const Text('SAVE & SELECT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
@@ -205,6 +180,7 @@ class _AddressSelectionBottomSheetState
 
   @override
   Widget build(BuildContext context) {
+    // మెయిన్ బాటమ్ షీట్ కోసం కీబోర్డ్ ప్యాడింగ్
     final keyboardPadding = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -216,7 +192,7 @@ class _AddressSelectionBottomSheetState
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -226,29 +202,14 @@ class _AddressSelectionBottomSheetState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Select Delivery Location',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
+                  const Text('Choose Delivery Location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                 ],
               ),
               const Divider(),
-              const Text(
-                'Current / Live GPS Location',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12.5,
-                  color: Color(0xFF64748B),
-                ),
-              ),
+
+              // 1. LIVE LOCATION EDITABLE FIELD & REDETECT BUTTON
+              const Text('Live Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -256,194 +217,101 @@ class _AddressSelectionBottomSheetState
                     child: TextField(
                       controller: _liveLocationController,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(
-                          Icons.my_location_rounded,
-                          color: Color(0xFFC81E45),
-                        ),
+                        prefixIcon: const Icon(Icons.my_location, color: Color(0xFF00875A)),
                         suffixIcon: _isDetecting
                             ? const Padding(
                                 padding: EdgeInsets.all(10),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Color(0xFFC81E45),
-                                ),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00875A)),
                               )
                             : IconButton(
-                                icon: const Icon(
-                                  Icons.autorenew_rounded,
-                                  color: Color(0xFFC81E45),
-                                ),
-                                tooltip: 'Detect GPS Location',
+                                icon: const Icon(Icons.autorenew, color: Color(0xFF00875A)),
+                                tooltip: 'Re-detect Location',
                                 onPressed: _redetectLocation,
                               ),
-                        hintText: 'Enter area, street, pincode...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 12,
-                        ),
+                        hintText: 'Edit or detect location...',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFC81E45),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      backgroundColor: const Color(0xFF00875A),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     ),
                     onPressed: () {
-                      widget.onAddressSelected(
-                        'Podalakur Road',
-                        _liveLocationController.text.trim(),
-                      );
+                      widget.onAddressSelected('Current Location', _liveLocationController.text.trim());
                       Navigator.pop(context);
                     },
-                    child: const Text(
-                      'CONFIRM',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: const Text('USE THIS', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'Popular Areas in Nellore (Quick Select)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12.5,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildQuickAreaChip(
-                    'Podalakur Road',
-                    'Podalakur Road- 5/523, Podalakur Rd, Telugu Ganga Colony, Nellore - 524004',
-                  ),
-                  _buildQuickAreaChip(
-                    'Vedayapalem',
-                    'Vedayapalem, Main Road, Near Railway Gate, Nellore - 524004',
-                  ),
-                  _buildQuickAreaChip(
-                    'Magunta Layout',
-                    'Plot 402, Magunta Layout, Beside Children Park, Nellore - 524003',
-                  ),
-                  _buildQuickAreaChip(
-                    'Trunk Road',
-                    'Trunk Road, Gandhi Statue Center, Nellore - 524001',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 20),
               const Divider(),
+
+              // 2. SAVED ADDRESSES SECTION (HOME, WORK, OTHER)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Saved Addresses',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+                  const Text('Saved Addresses', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   TextButton.icon(
                     onPressed: () => _showAddAddressDialog('Home'),
-                    icon: const Icon(
-                      Icons.add,
-                      size: 16,
-                      color: Color(0xFFC81E45),
-                    ),
-                    label: const Text(
-                      'Add New',
-                      style: TextStyle(
-                        color: Color(0xFFC81E45),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    icon: const Icon(Icons.add, size: 16, color: Color(0xFF00875A)),
+                    label: const Text('Add New', style: TextStyle(color: Color(0xFF00875A), fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+
+              // Quick Add Chips
               Row(
                 children: [
                   ActionChip(
-                    avatar: const Icon(
-                      Icons.home_rounded,
-                      size: 16,
-                      color: Color(0xFFC81E45),
-                    ),
+                    avatar: const Icon(Icons.home, size: 16, color: Color(0xFF00875A)),
                     label: const Text('Add Home'),
                     onPressed: () => _showAddAddressDialog('Home'),
                   ),
                   const SizedBox(width: 8),
                   ActionChip(
-                    avatar: const Icon(
-                      Icons.work_rounded,
-                      size: 16,
-                      color: Color(0xFFC81E45),
-                    ),
+                    avatar: const Icon(Icons.work, size: 16, color: Color(0xFF00875A)),
                     label: const Text('Add Work'),
                     onPressed: () => _showAddAddressDialog('Work'),
                   ),
                   const SizedBox(width: 8),
                   ActionChip(
-                    avatar: const Icon(
-                      Icons.location_on_rounded,
-                      size: 16,
-                      color: Color(0xFFC81E45),
-                    ),
+                    avatar: const Icon(Icons.location_on, size: 16, color: Color(0xFF00875A)),
                     label: const Text('Add Other'),
                     onPressed: () => _showAddAddressDialog('Other'),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+
+              const SizedBox(height: 12),
+
               if (widget.savedAddresses.isEmpty)
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(
-                    'Tap any quick area above or click Add Home to save your address.',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  child: Text('No saved addresses yet. Click Add Home or Add Work above to save.', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 )
               else
                 ...widget.savedAddresses.map((addr) {
-                  IconData icon = Icons.location_on_rounded;
-                  if (addr.title == 'Home') icon = Icons.home_rounded;
-                  if (addr.title == 'Work') icon = Icons.work_rounded;
+                  IconData icon = Icons.location_on;
+                  if (addr.title == 'Home') icon = Icons.home;
+                  if (addr.title == 'Work') icon = Icons.work;
 
                   return Card(
-                    elevation: 0.5,
+                    elevation: 1,
                     margin: const EdgeInsets.only(bottom: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
                     child: ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: const Color(0x1AC81E45),
-                        child: Icon(icon, color: const Color(0xFFC81E45)),
+                        backgroundColor: const Color(0xFF00875A).withAlpha(26),
+                        child: Icon(icon, color: const Color(0xFF00875A)),
                       ),
-                      title: Text(
-                        addr.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        addr.fullAddress,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: Text(addr.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(addr.fullAddress, maxLines: 2, overflow: TextOverflow.ellipsis),
                       onTap: () {
                         widget.onAddressSelected(addr.title, addr.fullAddress);
                         Navigator.pop(context);
@@ -453,46 +321,6 @@ class _AddressSelectionBottomSheetState
                 }),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickAreaChip(String label, String fullAddress) {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _liveLocationController.text = fullAddress;
-        });
-        widget.onAddressSelected(label, fullAddress);
-        Navigator.pop(context);
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF1F2),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFFECDD3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.location_on_rounded,
-              size: 13,
-              color: Color(0xFFC81E45),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF9F1239),
-              ),
-            ),
-          ],
         ),
       ),
     );

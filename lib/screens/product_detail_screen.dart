@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
+import '../widgets/bottom_order_bar.dart';
 import '../widgets/product_detail/product_image_carousel_widget.dart';
 import '../widgets/product_detail/product_price_and_highlights_widgets.dart';
 import '../widgets/product_detail/product_reviews_and_similar_widgets.dart';
@@ -246,56 +247,91 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. MULTI-SLIDE IMAGE CAROUSEL + LOCATION BAR + LIVE COUNTDOWN
-                  ProductImageCarouselWidget(
-                    productId: widget.productId,
-                    productName: name,
-                    primaryImageUrl: imageUrl,
-                    extraImages: extraImages,
-                    unit: unit,
-                    discountPercent: discountPercent,
-                    deliveryLocation: _deliveryLocation,
-                    onChangeLocationTap: _changeDeliveryLocationDialog,
-                  ),
+            child: Stack(
+              children: [
+                SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. MULTI-SLIDE IMAGE CAROUSEL + LOCATION BAR + LIVE COUNTDOWN
+                      ProductImageCarouselWidget(
+                        productId: widget.productId,
+                        productName: name,
+                        primaryImageUrl: imageUrl,
+                        extraImages: extraImages,
+                        unit: unit,
+                        discountPercent: discountPercent,
+                        deliveryLocation: _deliveryLocation,
+                        onChangeLocationTap: _changeDeliveryLocationDialog,
+                      ),
 
-                  // 2. PRICE, MALL BADGE, SPECIAL OFFER, SIZE SELECTOR, SELLER & HIGHLIGHTS
-                  ProductPriceAndHighlightsSection(
-                    productId: widget.productId,
-                    name: name,
-                    price: basePrice,
-                    marketPrice: baseMarketPrice,
-                    unit: unit,
-                    category: category,
-                    description: description,
-                    merchantId: merchantId,
-                    stock: stock,
-                    isWishlisted: _isWishlisted,
-                    onWishlistToggle: () => _toggleWishlist(name),
-                    onShareTap: () => _shareProduct(name, basePrice, unit),
-                    selectedPackMultiplier: _selectedPackMultiplier,
-                    onPackMultiplierChanged: (mult) {
-                      setState(() => _selectedPackMultiplier = mult);
+                      // 2. PRICE, MALL BADGE, SPECIAL OFFER, SIZE SELECTOR, SELLER & HIGHLIGHTS
+                      ProductPriceAndHighlightsSection(
+                        productId: widget.productId,
+                        name: name,
+                        price: basePrice,
+                        marketPrice: baseMarketPrice,
+                        unit: unit,
+                        category: category,
+                        description: description,
+                        merchantId: merchantId,
+                        stock: stock,
+                        isWishlisted: _isWishlisted,
+                        onWishlistToggle: () => _toggleWishlist(name),
+                        onShareTap: () => _shareProduct(name, basePrice, unit),
+                        selectedPackMultiplier: _selectedPackMultiplier,
+                        onPackMultiplierChanged: (mult) {
+                          setState(() => _selectedPackMultiplier = mult);
+                        },
+                      ),
+
+                      // 3. REAL-TIME PHOTO REVIEWS + SMART RELATED PRODUCTS + CATEGORY & ENDLESS FEED
+                      ProductReviewsAndSimilarSection(
+                        productId: widget.productId,
+                        productName: name,
+                        category: category,
+                        primaryImageUrl: imageUrl,
+                        deliveryLocation: _deliveryLocation,
+                        onChangeLocationTap: _changeDeliveryLocationDialog,
+                        endlessBatchesCount: _endlessBatchesCount,
+                      ),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
+
+                // FLOATING VIEW CART PILL (Image 1) with up to 3 latest items
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 6,
+                  child: Selector<CartProvider, int>(
+                    selector: (context, cart) => cart.totalQuantity,
+                    builder: (context, totalQty, child) {
+                      if (totalQty <= 0) return const SizedBox.shrink();
+                      final cartProvider =
+                          Provider.of<CartProvider>(context, listen: false);
+                      return BottomOrderBar(
+                        totalQuantity: totalQty,
+                        totalAmount: cartProvider.totalAmount,
+                        selectedAddress: _deliveryLocation,
+                        onViewCartPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CheckoutScreen(
+                                selectedAddress: _deliveryLocation,
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     },
                   ),
-
-                  // 3. REAL-TIME PHOTO REVIEWS + SMART RELATED PRODUCTS + CATEGORY & ENDLESS FEED
-                  ProductReviewsAndSimilarSection(
-                    productId: widget.productId,
-                    productName: name,
-                    category: category,
-                    primaryImageUrl: imageUrl,
-                    deliveryLocation: _deliveryLocation,
-                    onChangeLocationTap: _changeDeliveryLocationDialog,
-                    endlessBatchesCount: _endlessBatchesCount,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
 

@@ -116,6 +116,7 @@ class SmartRecommendationEngine {
     return false;
   }
 
+  /// Returns directly related products (e.g., if Milk is clicked -> other brand Milk, Curd, Dairy, and same-category items)
   static List<QueryDocumentSnapshot> getRelatedProducts({
     required String currentProductId,
     required String currentName,
@@ -139,8 +140,7 @@ class SmartRecommendationEngine {
 
     int scoreDoc(QueryDocumentSnapshot doc) {
       final data = doc.data() as Map<String, dynamic>;
-      final String name =
-          (data['name'] ?? data['title'] ?? '').toString().toLowerCase();
+      final String name = (data['name'] ?? data['title'] ?? '').toString().toLowerCase();
       final String cat = (data['category'] ?? '').toString().toLowerCase();
       final String desc = (data['description'] ?? '').toString().toLowerCase();
       final String combined = '$name $cat $desc';
@@ -148,10 +148,12 @@ class SmartRecommendationEngine {
 
       int score = stock > 0 ? 10 : 0;
 
+      // Exact word overlap (e.g. "milk" in another brand's milk packet)
       for (final w in nameWords) {
         if (name.contains(w)) score += 50;
       }
 
+      // Group affinity (e.g. Milk -> Curd, Paneer, Butter, Ghee)
       if (isDairy && _matchesAny(combined, _dairyKeywords)) {
         score += 40;
       }
@@ -162,11 +164,13 @@ class SmartRecommendationEngine {
         score += 35;
       }
 
+      // Same category bonus
       if (currentCategory.isNotEmpty &&
           cat.contains(currentCategory.toLowerCase())) {
         score += 25;
       }
 
+      // Companion bonus (e.g. Milk + Cooking/Tea/Sugar/Grocery)
       if (isDairy && _matchesAny(combined, _cookingKeywords)) {
         score += 18;
       }
@@ -174,12 +178,12 @@ class SmartRecommendationEngine {
       return score;
     }
 
-    final List<QueryDocumentSnapshot> sorted =
-        List<QueryDocumentSnapshot>.from(others);
+    final List<QueryDocumentSnapshot> sorted = List<QueryDocumentSnapshot>.from(others);
     sorted.sort((a, b) => scoreDoc(b).compareTo(scoreDoc(a)));
     return sorted;
   }
 
+  /// Returns cooking & companion products that pair well with the current item
   static List<QueryDocumentSnapshot> getCookingAndCompanionProducts({
     required String currentProductId,
     required String currentName,
@@ -205,6 +209,7 @@ class SmartRecommendationEngine {
     return others;
   }
 
+  /// Groups all products into distinct Category sections for vertical scrolling
   static List<CategorySectionGroup> buildCategorySections(
     List<QueryDocumentSnapshot> allDocs, {
     String? excludeProductId,
@@ -217,6 +222,7 @@ class SmartRecommendationEngine {
 
     final List<CategorySectionGroup> groups = [];
 
+    // 1. Milk, Curd & Dairy Essentials (if any match)
     final List<QueryDocumentSnapshot> dairyDocs = pool.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final String text =
@@ -237,6 +243,7 @@ class SmartRecommendationEngine {
       );
     }
 
+    // 2. Fresh Vegetables & Fruits
     final List<QueryDocumentSnapshot> veggieDocs = pool.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final String text =
@@ -259,6 +266,7 @@ class SmartRecommendationEngine {
       );
     }
 
+    // 3. Cooking Essentials & Daily Grocery
     final List<QueryDocumentSnapshot> groceryDocs = pool.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final String text =
@@ -281,6 +289,7 @@ class SmartRecommendationEngine {
       );
     }
 
+    // 4. Medicines & Pharmacy
     final List<QueryDocumentSnapshot> pharmaDocs = pool.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final String cat = (data['category'] ?? '').toString().toLowerCase();
@@ -300,6 +309,7 @@ class SmartRecommendationEngine {
       );
     }
 
+    // 5. Electronics & Home Utility
     final List<QueryDocumentSnapshot> elecDocs = pool.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final String cat = (data['category'] ?? '').toString().toLowerCase();
@@ -319,6 +329,7 @@ class SmartRecommendationEngine {
       );
     }
 
+    // Fallback: if custom categories exist that weren't captured above, group them dynamically
     if (groups.isEmpty && pool.isNotEmpty) {
       groups.add(
         CategorySectionGroup(
@@ -335,6 +346,8 @@ class SmartRecommendationEngine {
     return groups;
   }
 
+  /// Generates an endless/infinite stream of themed category & recommendation sections
+  /// for any batch index (0, 1, 2, 3...) so scrolling never ends.
   static CategorySectionGroup generateEndlessSection({
     required int batchIndex,
     required List<QueryDocumentSnapshot> allDocs,
@@ -349,7 +362,7 @@ class SmartRecommendationEngine {
       },
       {
         'title': 'Trending in Nellore Today',
-        'subtitle': 'Most ordered products in Podalakur Rd & Nellore',
+        'subtitle': 'Most ordered products in your neighborhood',
         'icon': Icons.trending_up_rounded,
         'color': Color(0xFF2563EB),
         'bg': Color(0xFFEFF6FF),
@@ -382,13 +395,14 @@ class SmartRecommendationEngine {
       return CategorySectionGroup(
         title: theme['title'] as String,
         subtitle: theme['subtitle'] as String,
-        icon: theme['icon'] as IconData,
+        icon: Icons.stars_rounded,
         accentColor: theme['color'] as Color,
         bgTint: theme['bg'] as Color,
         products: const [],
       );
     }
 
+    // Rotate/offset the product list deterministically by batchIndex so each endless section feels fresh
     final int count = allDocs.length;
     final int takeCount = count >= 6 ? 6 : count;
     final List<QueryDocumentSnapshot> rotated = List.generate(takeCount, (i) {
@@ -399,7 +413,7 @@ class SmartRecommendationEngine {
     return CategorySectionGroup(
       title: theme['title'] as String,
       subtitle: theme['subtitle'] as String,
-      icon: theme['icon'] as IconData,
+      icon: Icons.stars_rounded,
       accentColor: theme['color'] as Color,
       bgTint: theme['bg'] as Color,
       products: rotated,

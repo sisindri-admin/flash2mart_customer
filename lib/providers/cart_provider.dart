@@ -8,9 +8,11 @@ class CartProvider extends ChangeNotifier {
 
   int get itemCount => _items.length;
 
-  int get totalQuantity => _items.values.fold(0, (sum, item) => sum + item.quantity);
+  int get totalQuantity =>
+      _items.values.fold(0, (sum, item) => sum + item.quantity);
 
-  double get totalAmount => _items.values.fold(0.0, (sum, item) => sum + item.totalPrice);
+  double get totalAmount =>
+      _items.values.fold(0.0, (sum, item) => sum + item.totalPrice);
 
   void addItem({
     required String id,
@@ -20,8 +22,7 @@ class CartProvider extends ChangeNotifier {
     required String imageUrl,
   }) {
     if (_items.containsKey(id)) {
-      // ఇప్పటికే ఉన్న Item లో Image URL ఖాళీగా కాకుండా ఉంటే అప్‌డేట్ చేస్తుంది
-      final existingItem = _items[id]!;
+      final existingItem = _items.remove(id)!;
       _items[id] = CartItem(
         id: existingItem.id,
         name: existingItem.name,
