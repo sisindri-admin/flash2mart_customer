@@ -38,7 +38,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
         child: const Icon(
           Icons.shopping_bag_rounded,
           size: 15,
-          color: Color(0xFF0072A0),
+          color: Color(0xFF00875A),
         ),
       );
     }
@@ -58,7 +58,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
             child: const Icon(
               Icons.shopping_bag_rounded,
               size: 15,
-              color: Color(0xFF0072A0),
+              color: Color(0xFF00875A),
             ),
           );
         }
@@ -72,7 +72,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
           child: const Icon(
             Icons.shopping_bag_rounded,
             size: 15,
-            color: Color(0xFF0072A0),
+            color: Color(0xFF00875A),
           ),
         ),
       );
@@ -87,7 +87,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
         child: const Icon(
           Icons.shopping_bag_rounded,
           size: 15,
-          color: Color(0xFF0072A0),
+          color: Color(0xFF00875A),
         ),
       ),
     );
@@ -112,88 +112,131 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
         final double stackWidth = 32.0 + ((count - 1) * 16.0);
 
         final double currentTotal = cart.totalAmount;
-        final double neededForFree =
-            (_freeDeliveryThreshold - currentTotal).clamp(0.0, _freeDeliveryThreshold);
+        final double neededForFree = (_freeDeliveryThreshold - currentTotal)
+            .clamp(0.0, _freeDeliveryThreshold);
         final bool isFreeUnlocked = neededForFree <= 0;
+        final double progress =
+            (currentTotal / _freeDeliveryThreshold).clamp(0.0, 1.0);
 
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 1. FLOATING "Shop for ₹199 or more to unlock FREE delivery" PILL WITH GREEN BIKE & "X" CLOSE
-            if (!_isFreeDeliveryBannerDismissed)
+            // 1. TOP PROGRESS BANNER: Shown ONLY when total < ₹199 with filling line & "X"
+            //    Once ₹199 is reached, it clears automatically because the cart badge itself shows "FREE Delivery"
+            if (!isFreeUnlocked && !_isFreeDeliveryBannerDismissed)
               Padding(
-                padding: const EdgeInsets.only(bottom: 6, left: 16, right: 16),
+                padding: const EdgeInsets.only(bottom: 5, left: 14, right: 14),
                 child: Center(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
+                    constraints: const BoxConstraints(maxWidth: 350),
+                    padding: const EdgeInsets.fromLTRB(10, 6, 8, 7),
                     decoration: BoxDecoration(
-                      color: const Color(0xF5FFFFFF),
-                      borderRadius: BorderRadius.circular(24),
+                      color: const Color(0xFAFFFFFF),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: const Color(0xFF86EFAC),
                         width: 1.1,
                       ),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x1F000000),
+                          color: Color(0x1A000000),
                           blurRadius: 8,
                           offset: Offset(0, 3),
                         ),
                       ],
                     ),
-                    child: Row(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFDCFCE7),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.two_wheeler_rounded,
-                            size: 15,
-                            color: Color(0xFF16A34A),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            isFreeUnlocked
-                                ? 'FREE Delivery unlocked on your order!'
-                                : 'Shop for ₹199 or more to unlock FREE delivery (Add ₹${neededForFree.ceil()})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF15803D),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 22,
+                              height: 22,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFDCFCE7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.two_wheeler_rounded,
+                                size: 14,
+                                color: Color(0xFF16A34A),
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        InkWell(
-                          onTap: () {
-                            setState(() {
-                              _isFreeDeliveryBannerDismissed = true;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF1F5F9),
-                              shape: BoxShape.circle,
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: RichText(
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text: 'Shop for ₹199 for ',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                    const TextSpan(
+                                      text: 'FREE Delivery ',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF15803D),
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: '(Add ₹${neededForFree.ceil()})',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFFD97706),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.close_rounded,
-                              size: 14,
-                              color: Color(0xFF475569),
+                            const SizedBox(width: 4),
+                            Text(
+                              '₹${currentTotal.toInt()}/199',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isFreeDeliveryBannerDismissed = true;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: const Padding(
+                                padding: EdgeInsets.all(2),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        // Sleek filling progress line
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 3,
+                            backgroundColor: const Color(0xFFE2E8F0),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF16A34A),
                             ),
                           ),
                         ),
@@ -203,26 +246,37 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
                 ),
               ),
 
-            // 2. COMPACT FLOATING "View cart" PILL BADGE (Smaller size hovering over screen)
+            // 2. FLOATING "View cart" BADGE:
+            //    - Styled with Flash2Mart Emerald Green gradient
+            //    - When ₹199 is reached, shows a small "FREE Delivery" label with green bike icon at the bottom of the badge!
+            //    - When total < 199, this "FREE Delivery" label is completely hidden!
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Center(
                 child: GestureDetector(
                   onTap: widget.onViewCartPressed,
-                  child: Container(
-                    height: 46,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    height: isFreeUnlocked ? 52 : 46,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0072A0),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF00875A), // Flash2Mart Brand Emerald Green
+                          Color(0xFF047857),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(28),
                       border: Border.all(
-                        color: const Color(0xFF0284C7),
+                        color: const Color(0xFF10B981),
                         width: 1,
                       ),
                       boxShadow: const [
                         BoxShadow(
-                          color: Color(0x33000000),
+                          color: Color(0x3300875A),
                           blurRadius: 10,
                           offset: Offset(0, 3),
                         ),
@@ -272,7 +326,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
                         ),
                         const SizedBox(width: 10),
 
-                        // Compact "View cart" + "X items"
+                        // Title, item count, and when >= 199: FREE Delivery at bottom of badge
                         Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,24 +336,49 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 height: 1.1,
                               ),
                             ),
                             Text(
-                              '${widget.totalQuantity} ${widget.totalQuantity == 1 ? 'item' : 'items'}',
+                              '${widget.totalQuantity} ${widget.totalQuantity == 1 ? 'item' : 'items'} • ₹${currentTotal.toInt()}',
                               style: const TextStyle(
-                                color: Color(0xFFE0F2FE),
+                                color: Color(0xFFDCFCE7),
                                 fontWeight: FontWeight.w600,
-                                fontSize: 10.5,
+                                fontSize: 10,
                                 height: 1.1,
                               ),
                             ),
+                            // Requirement 1: Free Delivery with small icon in small letters inside cart badge
+                            // Only appears when total >= 199; disappears completely when below 199!
+                            if (isFreeUnlocked) ...[
+                              const SizedBox(height: 1),
+                              const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.two_wheeler_rounded,
+                                    size: 11,
+                                    color: Color(0xFF86EFAC),
+                                  ),
+                                  SizedBox(width: 3),
+                                  Text(
+                                    'FREE Delivery',
+                                    style: TextStyle(
+                                      color: Color(0xFFDCFCE7),
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 9.5,
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(width: 12),
 
-                        // Compact White Circle with '>' Chevron
+                        // Compact White Circle with Green '>' Chevron
                         Container(
                           width: 32,
                           height: 32,
@@ -310,7 +389,7 @@ class _BottomOrderBarState extends State<BottomOrderBar> {
                           child: const Center(
                             child: Icon(
                               Icons.chevron_right_rounded,
-                              color: Color(0xFF0072A0),
+                              color: Color(0xFF00875A),
                               size: 22,
                             ),
                           ),

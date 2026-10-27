@@ -35,6 +35,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _addressEditController = TextEditingController();
 
+  // Search Tab Controller
+  final TextEditingController _dedicatedSearchController =
+      TextEditingController();
+  String _dedicatedSearchQuery = '';
+
+  // Today Offers Tab Category Filter
+  String _selectedOfferCategory = 'All';
+
   // Cached single Firestore stream + cached docs so products NEVER blink on rebuild!
   late final Stream<QuerySnapshot> _productsStream;
   List<QueryDocumentSnapshot> _cachedProductDocs = const [];
@@ -74,8 +82,25 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeScrollController.removeListener(_onHomeScroll);
     _homeScrollController.dispose();
     _searchController.dispose();
+    _dedicatedSearchController.dispose();
     _addressEditController.dispose();
     super.dispose();
+  }
+
+  List<String> _extractOfferImageUrls() {
+    final List<String> list = [];
+    for (final doc in _cachedProductDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final String img =
+          (data['imageUrl'] ?? data['imageBase64'] ?? data['image'] ?? '')
+              .toString()
+              .trim();
+      if (img.isNotEmpty) {
+        list.add(img);
+        if (list.length >= 8) break;
+      }
+    }
+    return list;
   }
 
   Future<void> _saveUserLiveCoordinatesToFirestore(
@@ -449,10 +474,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Requirement 1, 3, 5:
-  /// - Uses cached `_productsStream` & `_cachedProductDocs` so products NEVER blink!
-  /// - Places `_buildScrollableTopHeader()` INSIDE `CustomScrollView` so when scrolling up,
-  ///   the Flash2Mart App Icon & Header smoothly scroll up with the page!
+  /// Tab 0: Home Screen
   Widget _buildHomeBody() {
     return SafeArea(
       bottom: false,
@@ -517,13 +539,12 @@ class _HomeScreenState extends State<HomeScreen> {
             controller: _homeScrollController,
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // 1. SCROLLABLE TOP HEADER (Flash2Mart App Icon + Brand + Location + Help + Search)
-              // Scrolls up cleanly when the customer scrolls down the page!
+              // 1. SCROLLABLE TOP HEADER (Flash2Mart App Icon + Title + Location + Help + Search)
               SliverToBoxAdapter(
                 child: _buildScrollableTopHeader(),
               ),
 
-              // 2. CLEAN BANNERS, CATEGORIES & FILTERS
+              // 2. BANNERS, CATEGORIES & FILTERS
               SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,7 +553,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     FestivalOfferBanner(
                       onShopFestivalTap: () {
                         setState(() {
-                          _activeQuickFilter = 'offers';
+                          _currentIndex = 4; // Switch to Today Offer
                         });
                       },
                     ),
@@ -717,7 +738,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
 
-              // Extra bottom padding so products can scroll cleanly behind/above the hovering bottom bars
               const SliverToBoxAdapter(
                 child: SizedBox(height: 195),
               ),
@@ -836,8 +856,184 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Tab 3: Offers Tab
-  Widget _buildOffersBody() {
+  /// Tab 2: Dedicated Search Tab (Requirement 3: Search with animated product names and icons scrolling UPWARD)
+  Widget _buildSearchBody() {
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            color: const Color(0xFF00875A),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.search_rounded, color: Colors.white, size: 22),
+                    SizedBox(width: 8),
+                    Text(
+                      'Search Fresh Groceries & Essentials',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Requirement 3: Dedicated animated search bar where "search for milk" scrolls UPWARD with changing icons
+                _DedicatedSearchBarWithRotatingHints(
+                  controller: _dedicatedSearchController,
+                  searchQuery: _dedicatedSearchQuery,
+                  onQueryChanged: (val) {
+                    setState(() {
+                      _dedicatedSearchQuery = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // Trending Search Suggestion Chips
+          Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  const Text(
+                    'Trending: ',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  ...[
+                    'Milk & Curd',
+                    'Tomato',
+                    'Onion',
+                    'Sona Masoori',
+                    'Sunflower Oil',
+                    'Atta',
+                    'Biscuits',
+                  ].map((chip) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ActionChip(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        label: Text(chip),
+                        labelStyle: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E293B),
+                        ),
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFFCBD5E1)),
+                        onPressed: () {
+                          _dedicatedSearchController.text = chip;
+                          setState(() {
+                            _dedicatedSearchQuery = chip.toLowerCase();
+                          });
+                        },
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+
+          // Search Results in 3-column clean grid
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _productsStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                  _cachedProductDocs = snapshot.data!.docs;
+                }
+                final List<QueryDocumentSnapshot> allDocs = _cachedProductDocs;
+
+                final List<QueryDocumentSnapshot> matchedDocs =
+                    allDocs.where((doc) {
+                  if (_dedicatedSearchQuery.isEmpty) return true;
+                  final data = doc.data() as Map<String, dynamic>;
+                  final String name = (data['name'] ?? data['title'] ?? '')
+                      .toString()
+                      .toLowerCase();
+                  final String category =
+                      (data['category'] ?? '').toString().toLowerCase();
+                  return name.contains(_dedicatedSearchQuery) ||
+                      category.contains(_dedicatedSearchQuery);
+                }).toList();
+
+                if (matchedDocs.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.search_off_rounded,
+                            size: 46,
+                            color: Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No items matching "$_dedicatedSearchQuery"',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Try searching for milk, rice, oil or fresh vegetables',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return GridView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 195),
+                  itemCount: matchedDocs.length,
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 0.46,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 14,
+                  ),
+                  itemBuilder: (context, idx) {
+                    return _buildProductCardFromDoc(
+                      matchedDocs[idx],
+                      keyPrefix: 'search_$idx',
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Tab 4: Today Offer Tab
+  Widget _buildTodayOffersBody() {
     return SafeArea(
       bottom: false,
       child: Column(
@@ -845,20 +1041,30 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: const Color(0xFF00875A),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFFE11D48),
+                  Color(0xFFBE123C),
+                  Color(0xFF9F1239),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Row(
                   children: [
                     Icon(
-                      Icons.local_offer_rounded,
+                      Icons.celebration_rounded,
                       color: Colors.white,
                       size: 22,
                     ),
-                    SizedBox(width: 10),
+                    SizedBox(width: 8),
                     Text(
-                      'Festival & Super Saver Offers',
+                      'Today Offers & Combos',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 17,
@@ -870,7 +1076,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
-                    backgroundColor: const Color(0x26FFFFFF),
+                    backgroundColor: const Color(0x33FFFFFF),
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   ),
@@ -889,6 +1095,66 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+
+          // Category Shortcut Pills for Today Offers
+          Container(
+            color: const Color(0xFFFFF1F2),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  ...[
+                    'All',
+                    'Milk & Dairy',
+                    'Vegetables',
+                    'Grocery',
+                    'Pharmacy',
+                    'Snacks',
+                  ].map((cat) {
+                    final bool isSel = _selectedOfferCategory == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _selectedOfferCategory = cat;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSel ? const Color(0xFFE11D48) : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSel
+                                  ? const Color(0xFFE11D48)
+                                  : const Color(0xFFFECDD3),
+                            ),
+                          ),
+                          child: Text(
+                            cat,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  isSel ? FontWeight.w900 : FontWeight.w600,
+                              color:
+                                  isSel ? Colors.white : const Color(0xFF9F1239),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _productsStream,
@@ -897,13 +1163,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   _cachedProductDocs = snapshot.data!.docs;
                 }
                 final List<QueryDocumentSnapshot> allDocs = _cachedProductDocs;
+
                 final List<QueryDocumentSnapshot> offerDocs =
                     allDocs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  final double price = ((data['price'] ?? 0) as num).toDouble();
-                  final double marketPrice =
-                      ((data['marketPrice'] ?? price) as num).toDouble();
-                  return marketPrice > price && price > 0;
+                  final String name = (data['name'] ?? data['title'] ?? '')
+                      .toString()
+                      .toLowerCase();
+                  final String category =
+                      (data['category'] ?? '').toString().toLowerCase();
+
+                  if (_selectedOfferCategory != 'All') {
+                    final sel = _selectedOfferCategory.toLowerCase();
+                    if (!category.contains(sel) && !name.contains(sel)) {
+                      return false;
+                    }
+                  }
+                  return true;
                 }).toList();
 
                 final List<QueryDocumentSnapshot> displayDocs =
@@ -916,15 +1192,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     const FestivalOfferBanner(),
                     const SizedBox(height: 6),
                     const OfferSliderBanner(),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(14, 14, 14, 10),
-                      child: Text(
-                        'Top Discounted Deals Today',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF0F172A),
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _selectedOfferCategory == 'All'
+                                ? 'Today\'s Special Deals & Combos'
+                                : '$_selectedOfferCategory Special Deals',
+                            style: const TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFE4E6),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${displayDocs.length} Deals',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFBE123C),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Padding(
@@ -963,17 +1264,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> pages = [
       _buildHomeBody(),
       _buildCategoriesBody(),
+      _buildSearchBody(),
       const MyOrdersScreen(),
-      _buildOffersBody(),
+      _buildTodayOffersBody(),
     ];
 
     final int safeIndex =
         (_currentIndex < pages.length && _currentIndex >= 0) ? _currentIndex : 0;
 
+    final List<String> offerImages = _extractOfferImageUrls();
+
     return Scaffold(
       backgroundColor: Colors.white,
-      // Requirement 4: Use Stack so Shop for ₹199 badge, Cart badge, and Bottom Navbar
-      // HOVER directly over the screen and the screen content is visible behind them!
       body: Stack(
         children: [
           Positioned.fill(
@@ -1018,6 +1320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 CustomBottomNavBar(
                   currentIndex: safeIndex,
+                  offerImages: offerImages,
                   onTap: (index) {
                     setState(() {
                       _currentIndex = index;
@@ -1058,7 +1361,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        // Flash2Mart App Icon (scrolls up with header!)
+                        // Flash2Mart App Icon
                         Container(
                           width: 32,
                           height: 32,
@@ -1158,7 +1461,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
 
-              // Small Help Icon next to Profile Icon -> Navigates to HelpScreen
+              // Small Help Icon next to Profile Icon
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -1211,7 +1514,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Isolated Rotating Search Bar Widget (so its timer NEVER rebuilds the product grid!)
+          // Search Bar on Home Screen
           _SearchBarWithRotatingHints(
             controller: _searchController,
             searchQuery: _searchQuery,
@@ -1225,8 +1528,188 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Standalone StatefulWidget for the rotating search bar hints so its 2.3-second timer
-/// ONLY rebuilds the hint text and NEVER triggers setState on HomeScreen!
+/// Dedicated Search Bar for Tab 2 where 'Search for "Milk"' etc. scrolls UPWARD with changing icons!
+class _DedicatedSearchBarWithRotatingHints extends StatefulWidget {
+  final TextEditingController controller;
+  final String searchQuery;
+  final ValueChanged<String> onQueryChanged;
+
+  const _DedicatedSearchBarWithRotatingHints({
+    required this.controller,
+    required this.searchQuery,
+    required this.onQueryChanged,
+  });
+
+  @override
+  State<_DedicatedSearchBarWithRotatingHints> createState() =>
+      _DedicatedSearchBarWithRotatingHintsState();
+}
+
+class _DedicatedSearchBarWithRotatingHintsState
+    extends State<_DedicatedSearchBarWithRotatingHints> {
+  final FocusNode _focusNode = FocusNode();
+  Timer? _hintTimer;
+  int _hintIndex = 0;
+  bool _isFocused = false;
+
+  static const List<Map<String, dynamic>> _searchHints = [
+    {'icon': Icons.egg_alt_rounded, 'text': 'Search for "Milk, Curd & Dairy"'},
+    {'icon': Icons.eco_rounded, 'text': 'Search for "Fresh Tomatoes & Veggies"'},
+    {'icon': Icons.soup_kitchen_rounded, 'text': 'Search for "Sona Masoori Rice & Atta"'},
+    {'icon': Icons.water_drop_rounded, 'text': 'Search for "Sunflower Oil & Ghee"'},
+    {'icon': Icons.cookie_rounded, 'text': 'Search for "Biscuits, Tea & Snacks"'},
+    {'icon': Icons.local_fire_department_rounded, 'text': 'Search for "Masala, Spices & Dal"'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (mounted) {
+        setState(() {
+          _isFocused = _focusNode.hasFocus;
+        });
+      }
+    });
+    _hintTimer = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+      if (mounted && widget.searchQuery.isEmpty && !_isFocused) {
+        setState(() {
+          _hintIndex = (_hintIndex + 1) % _searchHints.length;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool showAnimatedHint = widget.searchQuery.isEmpty && !_isFocused;
+    final currentHint = _searchHints[_hintIndex];
+    final IconData hintIcon = currentHint['icon'] as IconData;
+    final String hintText = currentHint['text'] as String;
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          if (showAnimatedHint)
+            Positioned(
+              left: 42,
+              right: 16,
+              top: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder:
+                        (Widget child, Animation<double> animation) {
+                      final inTween = Tween<Offset>(
+                        begin: const Offset(0.0, 1.0), // Scroll UPWARD
+                        end: Offset.zero,
+                      );
+                      return ClipRect(
+                        child: SlideTransition(
+                          position: inTween.animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: child,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      key: ValueKey<int>(_hintIndex),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hintIcon,
+                          size: 15,
+                          color: const Color(0xFF00875A),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            hintText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            onChanged: (v) => widget.onQueryChanged(v.trim().toLowerCase()),
+            decoration: InputDecoration(
+              hintText: showAnimatedHint ? '' : 'Type product name...',
+              hintStyle: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12.5,
+              ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: Color(0xFF00875A),
+                size: 20,
+              ),
+              suffixIcon: widget.searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(
+                        Icons.cancel_rounded,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        widget.controller.clear();
+                        widget.onQueryChanged('');
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Standalone StatefulWidget for the rotating search bar hints on Home Screen
 class _SearchBarWithRotatingHints extends StatefulWidget {
   final TextEditingController controller;
   final String searchQuery;
@@ -1320,20 +1803,13 @@ class _SearchBarWithRotatingHintsState
                     duration: const Duration(milliseconds: 420),
                     transitionBuilder:
                         (Widget child, Animation<double> animation) {
-                      final bool isIncoming =
-                          child.key == ValueKey<int>(_hintIndex);
-                      final Tween<Offset> slideTween = isIncoming
-                          ? Tween<Offset>(
-                              begin: const Offset(0.0, 0.95),
-                              end: Offset.zero,
-                            )
-                          : Tween<Offset>(
-                              begin: const Offset(0.0, -0.95),
-                              end: Offset.zero,
-                            );
+                      final inTween = Tween<Offset>(
+                        begin: const Offset(0.0, 0.95),
+                        end: Offset.zero,
+                      );
                       return ClipRect(
                         child: SlideTransition(
-                          position: slideTween.animate(
+                          position: inTween.animate(
                             CurvedAnimation(
                               parent: animation,
                               curve: Curves.easeOutCubic,
