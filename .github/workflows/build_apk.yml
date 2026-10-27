@@ -11,6 +11,7 @@ on:
       - dev-branch-1
       - dev-branch-2
       - dev-branch-3
+      - dev-branch-4
 
 
 permissions:

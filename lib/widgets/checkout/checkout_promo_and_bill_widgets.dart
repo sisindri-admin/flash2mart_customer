@@ -59,7 +59,7 @@ class CheckoutPromoAndBillWidgets {
 
 class CheckoutFreeDeliveryBanner extends StatelessWidget {
   final double itemTotal;
-  static const double threshold = 200.0;
+  static const double threshold = 199.0;
 
   const CheckoutFreeDeliveryBanner({
     super.key,
@@ -75,38 +75,37 @@ class CheckoutFreeDeliveryBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isUnlocked ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+        color: const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isUnlocked ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: const Color(0xFF86EFAC)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                isUnlocked
-                    ? Icons.verified_rounded
-                    : Icons.local_shipping_rounded,
-                size: 18,
-                color: isUnlocked
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFD97706),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDCFCE7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.two_wheeler_rounded,
+                  size: 16,
+                  color: Color(0xFF16A34A),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   isUnlocked
-                      ? 'FREE Delivery unlocked on this order! (Saved ₹25)'
-                      : 'Add ₹${remaining.ceil()} more to get FREE Delivery (Save ₹25)',
-                  style: TextStyle(
-                    fontSize: 12.5,
+                      ? 'FREE Delivery unlocked on your ₹199+ order! (Saved ₹25)'
+                      : 'Shop for ₹199 or more to unlock FREE Delivery (Add ₹${remaining.ceil()})',
+                  style: const TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: isUnlocked
-                        ? const Color(0xFF15803D)
-                        : const Color(0xFF92400E),
+                    color: Color(0xFF15803D),
                   ),
                 ),
               ),
@@ -119,7 +118,7 @@ class CheckoutFreeDeliveryBanner extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 5,
-                backgroundColor: const Color(0xFFFDE68A),
+                backgroundColor: const Color(0xFFDCFCE7),
                 valueColor: const AlwaysStoppedAnimation<Color>(
                   Color(0xFF16A34A),
                 ),
@@ -179,7 +178,9 @@ class CheckoutCouponSectionCard extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isEligible ? const Color(0xFFF8FAFC) : Colors.grey.shade100,
+                    color: isEligible
+                        ? const Color(0xFFF8FAFC)
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isEligible
@@ -263,8 +264,9 @@ class CheckoutCouponSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double discount =
-        appliedCoupon != null ? appliedCoupon!.calculateDiscount(itemTotal) : 0.0;
+    final double discount = appliedCoupon != null
+        ? appliedCoupon!.calculateDiscount(itemTotal)
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -407,7 +409,8 @@ class CheckoutInstructionQuickChips extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+              color:
+                  isSelected ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isSelected

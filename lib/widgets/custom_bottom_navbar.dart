@@ -12,22 +12,21 @@ class CustomBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
       child: SafeArea(
         top: false,
         child: Container(
-          height: 68,
+          height: 60,
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(38),
+            color: const Color(0xFAFFFFFF),
+            borderRadius: BorderRadius.circular(34),
             border: Border.all(color: const Color(0xFFE2E8F0)),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x18000000),
-                blurRadius: 14,
+                color: Color(0x22000000),
+                blurRadius: 16,
                 offset: Offset(0, 4),
               ),
             ],
@@ -40,7 +39,6 @@ class CustomBottomNavBar extends StatelessWidget {
                 label: 'Home',
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
-                isHome: true,
               ),
               _buildPillNavItem(
                 index: 1,
@@ -72,7 +70,6 @@ class CustomBottomNavBar extends StatelessWidget {
     required String label,
     required IconData icon,
     required IconData activeIcon,
-    bool isHome = false,
   }) {
     final bool isSelected = currentIndex == index;
 
@@ -84,16 +81,16 @@ class CustomBottomNavBar extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
             color: isSelected ? const Color(0xFFEEEEEE) : Colors.transparent,
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(28),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 isSelected ? activeIcon : icon,
-                size: 25,
+                size: 22,
                 color: isSelected
-                    ? const Color(0xFFE11D48) // Red active icon from Image 2
+                    ? const Color(0xFFE11D48)
                     : const Color(0xFF52525B),
               ),
               const SizedBox(height: 2),
@@ -102,8 +99,8 @@ class CustomBottomNavBar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                   color: isSelected
                       ? const Color(0xFF09090B)
                       : const Color(0xFF27272A),

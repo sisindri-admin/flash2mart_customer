@@ -122,6 +122,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return Image.memory(
           bytes,
           fit: BoxFit.cover,
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) => Icon(
             Icons.shopping_bag_outlined,
             size: 24,
@@ -140,6 +141,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Image.network(
       imageStr,
       fit: BoxFit.contain,
+      gaplessPlayback: true,
       errorBuilder: (context, error, stackTrace) => Icon(
         Icons.shopping_bag_outlined,
         size: 24,
@@ -165,14 +167,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _isPlacingOrder = true);
 
     try {
-      // 1. Refresh live GPS coordinates at the moment of clicking PLACE ORDER
       if (_resolvedLat == null || _resolvedLng == null) {
         await _ensureLiveCustomerCoordinates();
       }
-      final double finalLat =
-          _resolvedLat ?? widget.customerLat ?? 14.4426; // Nellore fallback
-      final double finalLng =
-          _resolvedLng ?? widget.customerLng ?? 79.9865;
+      final double finalLat = _resolvedLat ?? widget.customerLat ?? 14.4426;
+      final double finalLng = _resolvedLng ?? widget.customerLng ?? 79.9865;
       final GeoPoint customerGeoPoint = GeoPoint(finalLat, finalLng);
       final String googleMapsPinUrl =
           'https://www.google.com/maps/dir/?api=1&destination=$finalLat,$finalLng';
@@ -181,7 +180,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final double discountAmount = _appliedCoupon != null
           ? _appliedCoupon!.calculateDiscount(itemTotal)
           : 0.0;
-      final double deliveryFee = itemTotal > 200 ? 0.0 : 25.0;
+      final double deliveryFee = itemTotal >= 199 ? 0.0 : 25.0;
       final double handlingFee = 5.0;
       final double grandTotal =
           (itemTotal - discountAmount + deliveryFee + handlingFee)
@@ -266,7 +265,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ? widget.selectedAddress!.trim()
           : 'Standard Doorstep Delivery ($finalLat, $finalLng)';
 
-      // 2. Save Customer's live GPS coordinates to 'customers/{uid}' as well
       try {
         await FirebaseFirestore.instance
             .collection('customers')
@@ -283,7 +281,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         }, SetOptions(merge: true));
       } catch (_) {}
 
-      // 3. Save Order with complete Customer Live Lat-Longs so Delivery Partner navigates directly to Customer pin
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(numericOrderId)
@@ -334,7 +331,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ],
       });
 
-      // 4. Play Order Placed Confirmation Chime Sound!
       await OrderSoundService.playOrderPlacedSound();
 
       cartProvider.clearCart();
@@ -634,7 +630,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ? _appliedCoupon!.calculateDiscount(itemTotal)
                 : 0.0;
             final double deliveryFee =
-                itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
+                itemTotal >= 199 || itemTotal == 0 ? 0.0 : 25.0;
             final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
             final double grandTotal =
                 (itemTotal - discountAmount + deliveryFee + handlingFee)
@@ -650,14 +646,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 key: const ValueKey('checkout_column'),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 0. LIVE PRICE CHANGE BANNER (when cart items changed price after days)
                   _buildPriceChangeNoticeBanner(changedItems),
-
-                  // 1. FREE DELIVERY PROGRESS BANNER
                   CheckoutFreeDeliveryBanner(itemTotal: itemTotal),
                   const SizedBox(height: 14),
-
-                  // 2. DELIVERY ADDRESS + LIVE GPS LAT-LONG BADGE
                   _buildSectionCard(
                     title: 'Delivery Address & Live GPS Pin',
                     icon: Icons.location_on_rounded,
@@ -710,8 +701,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // 3. ORDER SUMMARY LIST (With Old vs New Price indicator if price changed)
                   _buildSectionCard(
                     title: 'Order Summary (${cartItems.length} Items)',
                     icon: Icons.shopping_bag_outlined,
@@ -916,8 +905,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // 4. APPLY COUPON / PROMO CODE SECTION
                   CheckoutCouponSectionCard(
                     itemTotal: itemTotal,
                     appliedCoupon: _appliedCoupon,
@@ -926,8 +913,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     },
                   ),
                   const SizedBox(height: 14),
-
-                  // 5. DELIVERY INSTRUCTIONS WITH QUICK CHIPS
                   _buildSectionCard(
                     title: 'Delivery Instructions (Optional)',
                     icon: Icons.note_alt_outlined,
@@ -954,8 +939,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // 6. PAYMENT METHOD SELECTOR
                   _buildSectionCard(
                     title: 'Payment Method',
                     icon: Icons.payment_rounded,
@@ -1007,8 +990,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // 7. BILL DETAILS
                   _buildSectionCard(
                     title: 'Bill Details',
                     icon: Icons.receipt_long_outlined,
@@ -1028,7 +1009,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                         const SizedBox(height: 8),
                         _buildBillRow(
-                          'Delivery Charge',
+                          'Delivery Charge (Free on ₹199+)',
                           deliveryFee == 0
                               ? 'FREE'
                               : '₹${deliveryFee.toStringAsFixed(2)}',
@@ -1086,7 +1067,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ? _appliedCoupon!.calculateDiscount(itemTotal)
                 : 0.0;
             final double deliveryFee =
-                itemTotal > 200 || itemTotal == 0 ? 0.0 : 25.0;
+                itemTotal >= 199 || itemTotal == 0 ? 0.0 : 25.0;
             final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
             final double grandTotal =
                 (itemTotal - discountAmount + deliveryFee + handlingFee)

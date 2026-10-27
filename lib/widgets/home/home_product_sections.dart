@@ -42,7 +42,6 @@ class HomeProductSections extends StatelessWidget {
       return marketPrice > price && price > 0;
     }).take(9).toList();
 
-    // Category-wise sections (Milk/Curd/Dairy, Vegetables & Fruits, Cooking & Grocery, etc.)
     final List<CategorySectionGroup> categorySections =
         SmartRecommendationEngine.buildCategorySections(allDocs);
 
@@ -53,35 +52,22 @@ class HomeProductSections extends StatelessWidget {
           _HorizontalProductSection(
             title: 'Recommended for You',
             subtitle: 'Handpicked fresh essentials • 15 mins delivery',
-            badgeText: 'TOP PICKS',
-            badgeColor: const Color(0xFF00875A),
-            headerBgGradient: const [Color(0xFFF0FDF4), Colors.white],
             docs: recommendedDocs,
             onCartUpdated: onCartUpdated,
-            isFlashDeal: false,
           ),
         if (flashDealDocs.isNotEmpty)
           _HorizontalProductSection(
             title: 'Flash Deals & Super Savers',
             subtitle: 'Biggest price drops on daily groceries',
-            badgeText: 'HOT DEALS',
-            badgeColor: const Color(0xFFDC2626),
-            headerBgGradient: const [Color(0xFFFEF2F2), Colors.white],
             docs: flashDealDocs,
             onCartUpdated: onCartUpdated,
-            isFlashDeal: true,
           ),
-        // Category-wise Horizontal Carousels on Home Screen using Image 3 ProductCard
         ...categorySections.map((group) {
           return _HorizontalProductSection(
             title: group.title,
             subtitle: group.subtitle,
-            badgeText: 'CATEGORY',
-            badgeColor: group.accentColor,
-            headerBgGradient: [group.bgTint, Colors.white],
             docs: group.products.take(10).toList(),
             onCartUpdated: onCartUpdated,
-            isFlashDeal: false,
           );
         }),
       ],
@@ -92,107 +78,55 @@ class HomeProductSections extends StatelessWidget {
 class _HorizontalProductSection extends StatelessWidget {
   final String title;
   final String subtitle;
-  final String badgeText;
-  final Color badgeColor;
-  final List<Color> headerBgGradient;
   final List<QueryDocumentSnapshot> docs;
   final VoidCallback onCartUpdated;
-  final bool isFlashDeal;
 
   const _HorizontalProductSection({
     required this.title,
     required this.subtitle,
-    required this.badgeText,
-    required this.badgeColor,
-    required this.headerBgGradient,
     required this.docs,
     required this.onCartUpdated,
-    required this.isFlashDeal,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 10, bottom: 4),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: headerBgGradient,
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+      margin: const EdgeInsets.only(top: 8, bottom: 2),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            isFlashDeal
-                                ? Icons.local_fire_department_rounded
-                                : Icons.recommend_rounded,
-                            size: 18,
-                            color: badgeColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: badgeColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    badgeText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.4,
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SizedBox(
-            height: 226,
+            height: 222,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -223,12 +157,13 @@ class _HorizontalProductSection extends StatelessWidget {
                 return Padding(
                   padding: const EdgeInsets.only(right: 10),
                   child: SizedBox(
-                    width: 116,
+                    width: 114,
                     child: Selector<CartProvider, int>(
                       selector: (context, cart) =>
                           cart.items[productId]?.quantity ?? 0,
                       builder: (context, qty, child) {
                         return ProductCard(
+                          key: ValueKey('hsec_${title}_$productId'),
                           id: productId,
                           name: name,
                           price: price,
@@ -281,7 +216,7 @@ class HomeProductSkeletonGrid extends StatelessWidget {
       itemCount: 6,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 0.48,
+        childAspectRatio: 0.46,
         crossAxisSpacing: 10,
         mainAxisSpacing: 14,
       ),
@@ -290,18 +225,18 @@ class HomeProductSkeletonGrid extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              height: 132,
+              height: 121,
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
             const SizedBox(height: 8),
-            Container(height: 14, width: 45, color: const Color(0xFFF1F5F9)),
-            const SizedBox(height: 6),
-            Container(height: 11, width: 90, color: const Color(0xFFF1F5F9)),
+            Container(height: 12, width: 45, color: const Color(0xFFF1F5F9)),
+            const SizedBox(height: 5),
+            Container(height: 14, width: 55, color: const Color(0xFFF1F5F9)),
             const SizedBox(height: 4),
-            Container(height: 10, width: 55, color: const Color(0xFFF1F5F9)),
+            Container(height: 11, width: 90, color: const Color(0xFFF1F5F9)),
           ],
         );
       },

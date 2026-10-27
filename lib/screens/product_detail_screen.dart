@@ -40,7 +40,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (!_scrollController.hasClients) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
-    if (maxScroll - currentScroll <= 420) {
+    if (maxScroll - currentScroll <= 420 && _endlessBatchesCount < 12) {
       setState(() {
         _endlessBatchesCount += 2;
       });
@@ -135,8 +135,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final String name =
         (data['name'] ?? data['title'] ?? 'Product Details').toString();
     final double basePrice = ((data['price'] ?? 0) as num).toDouble();
-    final double baseMarketPrice =
+    final double rawMarketPrice =
         ((data['marketPrice'] ?? basePrice) as num).toDouble();
+    final double baseMarketPrice = (rawMarketPrice > basePrice && basePrice > 0)
+        ? rawMarketPrice
+        : (basePrice > 0 ? (basePrice * 1.18).ceilToDouble() : basePrice);
     final String unit =
         (data['unit'] ?? data['weight'] ?? '1 unit').toString();
     final String imageUrl = (data['imageUrl'] ??
@@ -165,11 +168,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     int discountPercent = 0;
     if (baseMarketPrice > basePrice && baseMarketPrice > 0) {
       discountPercent =
-          (((baseMarketPrice - basePrice) / baseMarketPrice) * 100).round();
+          (((baseMarketPrice - basePrice) / baseMarketPrice) * 100)
+              .round()
+              .clamp(5, 85);
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -192,11 +197,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: Color(0xFF334155)),
-            tooltip: 'Search Products',
-            onPressed: () => Navigator.pop(context),
-          ),
           IconButton(
             icon: Icon(
               _isWishlisted
@@ -244,70 +244,75 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Column(
+      // Stack so the floating ₹199 badge, compact Cart badge, and Add/Buy pill hover over the screen!
+      body: Stack(
         children: [
-          Expanded(
-            child: Stack(
-              children: [
-                SingleChildScrollView(
-                  controller: _scrollController,
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. MULTI-SLIDE IMAGE CAROUSEL + LOCATION BAR + LIVE COUNTDOWN
-                      ProductImageCarouselWidget(
-                        productId: widget.productId,
-                        productName: name,
-                        primaryImageUrl: imageUrl,
-                        extraImages: extraImages,
-                        unit: unit,
-                        discountPercent: discountPercent,
-                        deliveryLocation: _deliveryLocation,
-                        onChangeLocationTap: _changeDeliveryLocationDialog,
-                      ),
-
-                      // 2. PRICE, MALL BADGE, SPECIAL OFFER, SIZE SELECTOR, SELLER & HIGHLIGHTS
-                      ProductPriceAndHighlightsSection(
-                        productId: widget.productId,
-                        name: name,
-                        price: basePrice,
-                        marketPrice: baseMarketPrice,
-                        unit: unit,
-                        category: category,
-                        description: description,
-                        merchantId: merchantId,
-                        stock: stock,
-                        isWishlisted: _isWishlisted,
-                        onWishlistToggle: () => _toggleWishlist(name),
-                        onShareTap: () => _shareProduct(name, basePrice, unit),
-                        selectedPackMultiplier: _selectedPackMultiplier,
-                        onPackMultiplierChanged: (mult) {
-                          setState(() => _selectedPackMultiplier = mult);
-                        },
-                      ),
-
-                      // 3. REAL-TIME PHOTO REVIEWS + SMART RELATED PRODUCTS + CATEGORY & ENDLESS FEED
-                      ProductReviewsAndSimilarSection(
-                        productId: widget.productId,
-                        productName: name,
-                        category: category,
-                        primaryImageUrl: imageUrl,
-                        deliveryLocation: _deliveryLocation,
-                        onChangeLocationTap: _changeDeliveryLocationDialog,
-                        endlessBatchesCount: _endlessBatchesCount,
-                      ),
-                      const SizedBox(height: 80),
-                    ],
+          Positioned.fill(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. MULTI-SLIDE IMAGE CAROUSEL
+                  ProductImageCarouselWidget(
+                    productId: widget.productId,
+                    productName: name,
+                    primaryImageUrl: imageUrl,
+                    extraImages: extraImages,
+                    unit: unit,
+                    discountPercent: discountPercent,
+                    deliveryLocation: _deliveryLocation,
+                    onChangeLocationTap: _changeDeliveryLocationDialog,
                   ),
-                ),
 
-                // FLOATING VIEW CART PILL (Image 1) with up to 3 latest items
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 6,
-                  child: Selector<CartProvider, int>(
+                  // 2. CLEAN PRICE + GREEN "% OFF" + PACK SIZE + STORE DETAILS
+                  ProductPriceAndHighlightsSection(
+                    productId: widget.productId,
+                    name: name,
+                    price: basePrice,
+                    marketPrice: baseMarketPrice,
+                    unit: unit,
+                    category: category,
+                    description: description,
+                    merchantId: merchantId,
+                    stock: stock,
+                    isWishlisted: _isWishlisted,
+                    onWishlistToggle: () => _toggleWishlist(name),
+                    onShareTap: () => _shareProduct(name, basePrice, unit),
+                    selectedPackMultiplier: _selectedPackMultiplier,
+                    onPackMultiplierChanged: (mult) {
+                      setState(() => _selectedPackMultiplier = mult);
+                    },
+                  ),
+
+                  // 3. ZERO-BLINK REVIEWS + SIMILAR & RELATED PRODUCTS
+                  ProductReviewsAndSimilarSection(
+                    productId: widget.productId,
+                    productName: name,
+                    category: category,
+                    primaryImageUrl: imageUrl,
+                    deliveryLocation: _deliveryLocation,
+                    onChangeLocationTap: _changeDeliveryLocationDialog,
+                    endlessBatchesCount: _endlessBatchesCount,
+                  ),
+                  const SizedBox(height: 190),
+                ],
+              ),
+            ),
+          ),
+
+          // HOVERING BOTTOM OVERLAY (Shop for ₹199 + Compact Cart Badge + Add/Buy Pill)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Selector<CartProvider, int>(
                     selector: (context, cart) => cart.totalQuantity,
                     builder: (context, totalQty, child) {
                       if (totalQty <= 0) return const SizedBox.shrink();
@@ -330,203 +335,207 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       );
                     },
                   ),
-                ),
-              ],
-            ),
-          ),
 
-          // 4. STICKY DUAL-BUTTON BOTTOM BAR ([Add to Cart] + [Buy Now])
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 10,
-                  offset: Offset(0, -3),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: Consumer<CartProvider>(
-                builder: (context, cart, child) {
-                  final int currentQty =
-                      cart.items[widget.productId]?.quantity ?? 0;
-
-                  if (isOutOfStock) {
-                    return Container(
-                      width: double.infinity,
-                      height: 48,
+                  // Floating Add to Cart / Buy Now Pill Bar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE2E8F0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'CURRENTLY OUT OF STOCK',
-                          style: TextStyle(
-                            color: Color(0xFF64748B),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14,
+                        color: const Color(0xFAFFFFFF),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x22000000),
+                            blurRadius: 14,
+                            offset: Offset(0, 4),
                           ),
-                        ),
+                        ],
                       ),
-                    );
-                  }
+                      child: Consumer<CartProvider>(
+                        builder: (context, cart, child) {
+                          final int currentQty =
+                              cart.items[widget.productId]?.quantity ?? 0;
 
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: currentQty == 0
-                            ? SizedBox(
-                                height: 46,
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF00875A),
-                                    side: const BorderSide(
-                                      color: Color(0xFF00875A),
-                                      width: 1.6,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
+                          if (isOutOfStock) {
+                            return Container(
+                              width: double.infinity,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'CURRENTLY OUT OF STOCK',
+                                  style: TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
                                   ),
-                                  onPressed: () {
-                                    for (int i = 0;
-                                        i < _selectedPackMultiplier;
-                                        i++) {
-                                      cart.addItem(
-                                        id: widget.productId,
-                                        name: name,
-                                        price: basePrice,
-                                        unit: unit,
-                                        imageUrl: imageUrl,
+                                ),
+                              ),
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: currentQty == 0
+                                    ? SizedBox(
+                                        height: 42,
+                                        child: OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                const Color(0xFF00875A),
+                                            side: const BorderSide(
+                                              color: Color(0xFF00875A),
+                                              width: 1.5,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(22),
+                                            ),
+                                          ),
+                                          onPressed: () {
+                                            for (int i = 0;
+                                                i < _selectedPackMultiplier;
+                                                i++) {
+                                              cart.addItem(
+                                                id: widget.productId,
+                                                name: name,
+                                                price: basePrice,
+                                                unit: unit,
+                                                imageUrl: imageUrl,
+                                              );
+                                            }
+                                          },
+                                          icon: const Icon(
+                                            Icons.shopping_cart_outlined,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Add to Cart',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 13.5,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Container(
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF0FDF4),
+                                          borderRadius:
+                                              BorderRadius.circular(22),
+                                          border: Border.all(
+                                            color: const Color(0xFF00875A),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          children: [
+                                            IconButton(
+                                              padding: EdgeInsets.zero,
+                                              icon: const Icon(
+                                                Icons.remove_rounded,
+                                                color: Color(0xFF00875A),
+                                              ),
+                                              onPressed: () =>
+                                                  cart.removeSingleItem(
+                                                widget.productId,
+                                              ),
+                                            ),
+                                            Text(
+                                              '$currentQty in Cart',
+                                              style: const TextStyle(
+                                                color: Color(0xFF00875A),
+                                                fontWeight: FontWeight.w900,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                            IconButton(
+                                              padding: EdgeInsets.zero,
+                                              icon: const Icon(
+                                                Icons.add_rounded,
+                                                color: Color(0xFF00875A),
+                                              ),
+                                              onPressed: () => cart.addItem(
+                                                id: widget.productId,
+                                                name: name,
+                                                price: basePrice,
+                                                unit: unit,
+                                                imageUrl: imageUrl,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 42,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00875A),
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(22),
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      if (currentQty == 0) {
+                                        for (int i = 0;
+                                            i < _selectedPackMultiplier;
+                                            i++) {
+                                          cart.addItem(
+                                            id: widget.productId,
+                                            name: name,
+                                            price: basePrice,
+                                            unit: unit,
+                                            imageUrl: imageUrl,
+                                          );
+                                        }
+                                      }
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CheckoutScreen(
+                                            selectedAddress: _deliveryLocation,
+                                          ),
+                                        ),
                                       );
-                                    }
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('$name added to Cart!'),
-                                        duration: const Duration(seconds: 1),
-                                        backgroundColor:
-                                            const Color(0xFF00875A),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.shopping_cart_outlined,
-                                    size: 19,
-                                  ),
-                                  label: const Text(
-                                    'Add to Cart',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
+                                    },
+                                    icon: const Icon(
+                                      Icons.double_arrow_rounded,
+                                      size: 18,
                                     ),
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF0FDF4),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFF00875A),
-                                    width: 1.6,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.remove_rounded,
-                                        color: Color(0xFF00875A),
-                                      ),
-                                      onPressed: () => cart
-                                          .removeSingleItem(widget.productId),
-                                    ),
-                                    Text(
-                                      '$currentQty in Cart',
-                                      style: const TextStyle(
-                                        color: Color(0xFF00875A),
+                                    label: const Text(
+                                      'Buy Now',
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w900,
                                         fontSize: 13.5,
                                       ),
                                     ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.add_rounded,
-                                        color: Color(0xFF00875A),
-                                      ),
-                                      onPressed: () => cart.addItem(
-                                        id: widget.productId,
-                                        name: name,
-                                        price: basePrice,
-                                        unit: unit,
-                                        imageUrl: imageUrl,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SizedBox(
-                          height: 46,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00875A),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: () {
-                              if (currentQty == 0) {
-                                for (int i = 0;
-                                    i < _selectedPackMultiplier;
-                                    i++) {
-                                  cart.addItem(
-                                    id: widget.productId,
-                                    name: name,
-                                    price: basePrice,
-                                    unit: unit,
-                                    imageUrl: imageUrl,
-                                  );
-                                }
-                              }
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CheckoutScreen(
-                                    selectedAddress: _deliveryLocation,
                                   ),
                                 ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.double_arrow_rounded,
-                              size: 19,
-                            ),
-                            label: const Text(
-                              'Buy Now',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14.5,
                               ),
-                            ),
-                          ),
-                        ),
+                            ],
+                          );
+                        },
                       ),
-                    ],
-                  );
-                },
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
