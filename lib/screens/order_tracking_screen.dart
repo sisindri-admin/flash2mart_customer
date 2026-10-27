@@ -24,6 +24,10 @@ class OrderTrackingScreen extends StatefulWidget {
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool _isCancelling = false;
+  Map<String, dynamic>? _merchantDocData;
+  Map<String, dynamic>? _customerDocData;
+  String? _lastLoadedMerchantId;
+  String? _lastLoadedUserId;
 
   void _navigateToMyOrders(BuildContext context) {
     if (Navigator.canPop(context)) {
@@ -66,6 +70,39 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  Future<void> _fetchMerchantAndCustomerDetails(
+      String merchantId, String userId) async {
+    if (merchantId.isNotEmpty && merchantId != _lastLoadedMerchantId) {
+      _lastLoadedMerchantId = merchantId;
+      try {
+        final mDoc = await FirebaseFirestore.instance
+            .collection('merchants')
+            .doc(merchantId)
+            .get();
+        if (mDoc.exists && mounted) {
+          setState(() {
+            _merchantDocData = mDoc.data();
+          });
+        }
+      } catch (_) {}
+    }
+
+    if (userId.isNotEmpty && userId != _lastLoadedUserId) {
+      _lastLoadedUserId = userId;
+      try {
+        final cDoc = await FirebaseFirestore.instance
+            .collection('customers')
+            .doc(userId)
+            .get();
+        if (cDoc.exists && mounted) {
+          setState(() {
+            _customerDocData = cDoc.data();
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
   Future<void> _confirmAndCancelOrder() async {
     final TextEditingController reasonController = TextEditingController();
     String selectedReason = 'Ordered by mistake';
@@ -80,7 +117,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text(
             'Cancel Order?',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
@@ -90,10 +128,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Please select a reason for cancelling this order:',
-                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                'Are you sure you want to cancel this order?',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               ...cancelReasons.map((reason) {
                 return RadioListTile<String>(
                   value: reason,
@@ -133,7 +171,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFDC2626),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () => Navigator.of(ctx).pop(true),
               child: const Text('Confirm Cancel'),
@@ -152,7 +191,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     setState(() => _isCancelling = true);
     try {
-      await FirebaseFirestore.instance.collection('orders').doc(widget.orderId).update({
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
         'status': 'Cancelled',
         'orderStatus': 'Cancelled',
         'currentStatus': 'Cancelled',
@@ -180,7 +222,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not cancel order: $e')),
+          SnackBar(
+            content: Text('Failed to cancel order: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -220,7 +265,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   MaterialPageRoute(builder: (_) => const HelpScreen()),
                 );
               },
-              icon: const Icon(Icons.support_agent_rounded, size: 18, color: Color(0xFF00875A)),
+              icon: const Icon(Icons.support_agent_rounded,
+                  size: 18, color: Color(0xFF00875A)),
               label: const Text(
                 'Help',
                 style: TextStyle(
@@ -258,11 +304,28 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               );
             }
 
-            final data = snapshot.data!.data() as Map<String, dynamic>? ?? {};
-            final model = OrderTrackingModel.fromFirestore(widget.orderId, data);
+            final data =
+                snapshot.data!.data() as Map<String, dynamic>? ?? {};
+
+            final String merchantId =
+                (data['merchantId'] ?? '').toString().trim();
+            final String userId = (data['userId'] ?? '').toString().trim();
+
+            if (data['storeLocation'] == null ||
+                data['customerLocation'] == null) {
+              _fetchMerchantAndCustomerDetails(merchantId, userId);
+            }
+
+            final model = OrderTrackingModel.fromFirestore(
+              widget.orderId,
+              data,
+              merchantDocData: _merchantDocData,
+              customerDocData: _customerDocData,
+            );
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -273,7 +336,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 2. LIVE OPENSTREETMAP + AUTO-FOLLOW + PARTNER PROFILE & CALL
+                  // 2. LIVE OPENSTREETMAP + BLUE ROUTE LINE + 3 PINS + DYNAMIC ETA BANNER
                   if (!model.isCancelled) ...[
                     LiveTrackingMapCard(
                       model: model,

@@ -35,286 +35,258 @@ class OrderStatusStepperCard extends StatelessWidget {
         ? const Color(0xFFFEF2F2)
         : isDelivered
             ? const Color(0xFFF0FDF4)
-            : const Color(0xFFEFF6FF);
-
-    final Color borderColor = isCancelled
-        ? const Color(0xFFFECACA)
-        : isDelivered
-            ? const Color(0xFFBBF7D0)
-            : const Color(0xFFBFDBFE);
-
-    final bool showOtpBanner = !isCancelled &&
-        !isDelivered &&
-        (model.currentStepIndex >= 2 || model.deliveryPartnerId.isNotEmpty);
+            : Colors.white;
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardBgColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor),
+        border: Border.all(
+          color: isCancelled
+              ? const Color(0xFFFECACA)
+              : isDelivered
+                  ? const Color(0xFFBBF7D0)
+                  : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Order ID & Cancel Action
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const Icon(Icons.storefront_rounded, size: 15, color: Color(0xFF64748B)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        model.storeName,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: Color(0xFF475569),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+              Text(
+                'ORDER #${model.orderId}',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 0.8,
                 ),
               ),
               if (model.canCancel && onCancelTap != null)
-                TextButton.icon(
+                TextButton(
                   onPressed: onCancelTap,
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFFDC2626),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    backgroundColor: const Color(0xFFFEE2E2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  icon: const Icon(Icons.close_rounded, size: 14),
-                  label: const Text(
+                  child: const Text(
                     'Cancel Order',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+
+          // Main Status Title + Dynamic Bike Arrival Time
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: primaryColor.withAlpha(30),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  isCancelled
-                      ? Icons.cancel_rounded
-                      : isDelivered
-                          ? Icons.check_circle_rounded
-                          : Icons.local_shipping_rounded,
-                  color: primaryColor,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'CURRENT ORDER STATUS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.6,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      model.displayStatus,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      model.statusSubtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF475569),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  model.displayStatus,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: primaryColor,
+                    letterSpacing: 0.2,
+                  ),
                 ),
               ),
+              if (!isCancelled && !isDelivered)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.two_wheeler_rounded,
+                        size: 15,
+                        color: Color(0xFF2563EB),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '~${model.estimatedBikeMinutes} Mins',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1D4ED8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
-          if (!isCancelled) ...[
-            const SizedBox(height: 16),
-            _buildHorizontalStepper(primaryColor),
-          ],
-          if (showOtpBanner) ...[
-            const SizedBox(height: 14),
+          const SizedBox(height: 4),
+          Text(
+            model.statusSubtitle,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 5-Step Progress Stepper
+          Row(
+            children: List.generate(_steps.length * 2 - 1, (index) {
+              if (index.isOdd) {
+                // Connecting line
+                final int stepBefore = index ~/ 2;
+                final bool isPassed = model.currentStepIndex > stepBefore &&
+                    !isCancelled;
+                return Expanded(
+                  child: Container(
+                    height: 3,
+                    color: isPassed
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                );
+              }
+
+              final int stepIndex = index ~/ 2;
+              final meta = _steps[stepIndex];
+              final bool isCurrent =
+                  model.currentStepIndex == stepIndex && !isCancelled;
+              final bool isCompleted =
+                  model.currentStepIndex > stepIndex && !isCancelled;
+
+              Color circleBg = const Color(0xFFF1F5F9);
+              Color iconColor = const Color(0xFF94A3B8);
+
+              if (isCompleted) {
+                circleBg = const Color(0xFF16A34A);
+                iconColor = Colors.white;
+              } else if (isCurrent) {
+                circleBg = primaryColor;
+                iconColor = Colors.white;
+              }
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: circleBg,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isCompleted ? Icons.check_rounded : meta.icon,
+                      size: 16,
+                      color: iconColor,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    meta.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: isCurrent || isCompleted
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: isCurrent || isCompleted
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFF94A3B8),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+          const SizedBox(height: 16),
+
+          // 4-Digit Delivery OTP Card (Always prominent for customer)
+          if (!isCancelled && !isDelivered)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF93C5FD)),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDBEAFE),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.lock_person_rounded,
-                      color: Color(0xFF1D4ED8),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Delivery Confirmation OTP',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        Text(
-                          'Share this 4-digit PIN with partner at doorstep',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: model.deliveryOtp));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Delivery OTP copied to clipboard'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius: BorderRadius.circular(8),
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.pin_rounded,
+                        color: Color(0xFF2563EB),
+                        size: 20,
                       ),
-                      child: Text(
-                        model.deliveryOtp.split('').join(' '),
+                      SizedBox(width: 8),
+                      Text(
+                        'Delivery OTP',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        model.deliveryOtp,
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 1.5,
+                          color: Color(0xFF1D4ED8),
+                          letterSpacing: 2.5,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () {
+                          Clipboard.setData(
+                              ClipboardData(text: model.deliveryOtp));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Delivery OTP copied!'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        },
+                        child: const Icon(
+                          Icons.copy_rounded,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-          ],
         ],
       ),
-    );
-  }
-
-  Widget _buildHorizontalStepper(Color activeColor) {
-    return Row(
-      children: List.generate(_steps.length * 2 - 1, (index) {
-        if (index.isOdd) {
-          final int stepBefore = index ~/ 2;
-          final bool isCompletedLine = stepBefore < model.currentStepIndex;
-          return Expanded(
-            child: Container(
-              height: 3,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: isCompletedLine
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFCBD5E1),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          );
-        }
-
-        final int stepIdx = index ~/ 2;
-        final _StepMeta meta = _steps[stepIdx];
-        final bool isDone = stepIdx < model.currentStepIndex || model.isDelivered;
-        final bool isCurrent = stepIdx == model.currentStepIndex && !model.isDelivered;
-
-        final Color circleColor = isDone
-            ? const Color(0xFF16A34A)
-            : isCurrent
-                ? activeColor
-                : Colors.white;
-
-        final Color iconColor = (isDone || isCurrent) ? Colors.white : const Color(0xFF94A3B8);
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: circleColor,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isDone
-                      ? const Color(0xFF16A34A)
-                      : isCurrent
-                          ? activeColor
-                          : const Color(0xFFCBD5E1),
-                  width: 1.5,
-                ),
-              ),
-              child: Icon(
-                isDone ? Icons.check_rounded : meta.icon,
-                size: 15,
-                color: iconColor,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              meta.label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: (isDone || isCurrent) ? FontWeight.bold : FontWeight.w500,
-                color: (isDone || isCurrent)
-                    ? const Color(0xFF1E293B)
-                    : const Color(0xFF64748B),
-              ),
-            ),
-          ],
-        );
-      }),
     );
   }
 }

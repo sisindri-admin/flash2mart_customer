@@ -110,7 +110,6 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isOutOfStock = stock <= 0;
 
-    // Ensure every product shows a clean green % OFF under the image
     final double effectiveMarketPrice = (marketPrice > price && price > 0)
         ? marketPrice
         : (price > 0 ? (price * 1.18).ceilToDouble() : price);
@@ -146,273 +145,277 @@ class ProductCard extends StatelessWidget {
             ),
           );
         },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. IMAGE + GRAY UNIT STRIP + OVERLAPPING ADD / "- 1 +" BUTTON
-            SizedBox(
-              height: 126,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 121,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: const Color(0xFFE2E8F0),
-                        width: 0.8,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 4,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. IMAGE + GRAY UNIT STRIP + OVERLAPPING ADD / "- 1 +" BUTTON
+              SizedBox(
+                height: 126,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: 121,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          width: 0.8,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(11),
+                              ),
+                              child: Opacity(
+                                opacity: isOutOfStock ? 0.45 : 1.0,
+                                child: _buildProductImage(imageUrl),
+                              ),
+                            ),
+                          ),
+                          // Light Gray Unit Strip ("410 g", "849 g", "500 g")
+                          Container(
+                            height: 24,
+                            width: double.infinity,
+                            color: const Color(0xFFF1F5F9),
+                            padding: const EdgeInsets.only(left: 7, right: 60),
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              unit,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(13),
-                            ),
-                            child: Opacity(
-                              opacity: isOutOfStock ? 0.45 : 1.0,
-                              child: _buildProductImage(imageUrl),
-                            ),
-                          ),
-                        ),
-                        // Light Gray Unit Strip ("500 g", "1 Pieces")
-                        Container(
-                          height: 24,
-                          width: double.infinity,
-                          color: const Color(0xFFF1F5F9),
-                          padding: const EdgeInsets.only(left: 7, right: 62),
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            unit,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF475569),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
 
-                  // Overlapping ADD / "- 1 +" Button on Bottom-Right
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: isOutOfStock
-                        ? Container(
-                            height: 28,
-                            padding: const EdgeInsets.symmetric(horizontal: 7),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE2E8F0),
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'OUT',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
+                    // Overlapping ADD / "- 1 +" Button on Bottom-Right
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: isOutOfStock
+                          ? Container(
+                              height: 28,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE2E8F0),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: const Center(
+                                child: Text(
+                                  'OUT',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF64748B),
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                        : quantityInCart == 0
-                            ? InkWell(
-                                onTap: onAdd,
-                                borderRadius: BorderRadius.circular(10),
-                                child: Container(
-                                  height: 30,
-                                  width: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: const Color(0xFF0072A0),
-                                      width: 1.2,
+                            )
+                          : quantityInCart == 0
+                              ? InkWell(
+                                  onTap: onAdd,
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Container(
+                                    height: 30,
+                                    width: 58,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: const Color(0xFF007AA6),
+                                        width: 1.3,
+                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x12000000),
+                                          blurRadius: 3,
+                                          offset: Offset(0, 1),
+                                        ),
+                                      ],
                                     ),
+                                    child: const Center(
+                                      child: Text(
+                                        'ADD',
+                                        style: TextStyle(
+                                          color: Color(0xFF007AA6),
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  height: 30,
+                                  width: 66,
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFF38BDF8),
+                                        Color(0xFF0284C7),
+                                      ],
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
                                     boxShadow: const [
                                       BoxShadow(
-                                        color: Color(0x12000000),
-                                        blurRadius: 3,
-                                        offset: Offset(0, 1),
+                                        color: Color(0x220284C7),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
                                       ),
                                     ],
                                   ),
-                                  child: const Center(
-                                    child: Text(
-                                      'ADD',
-                                      style: TextStyle(
-                                        color: Color(0xFF0072A0),
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 11.5,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      InkWell(
+                                        onTap: onRemove,
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                            vertical: 3,
+                                          ),
+                                          child: Icon(
+                                            Icons.remove,
+                                            size: 14,
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                height: 30,
-                                width: 66,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF38BDF8),
-                                      Color(0xFF0284C7),
+                                      Text(
+                                        '$quantityInCart',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      InkWell(
+                                        onTap: onAdd,
+                                        child: const Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 3,
+                                            vertical: 3,
+                                          ),
+                                          child: Icon(
+                                            Icons.add,
+                                            size: 14,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
                                     ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
                                   ),
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x220284C7),
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
                                 ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    InkWell(
-                                      onTap: onRemove,
-                                      child: const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 3,
-                                          vertical: 3,
-                                        ),
-                                        child: Icon(
-                                          Icons.remove,
-                                          size: 14,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      '$quantityInCart',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    InkWell(
-                                      onTap: onAdd,
-                                      child: const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 3,
-                                          vertical: 3,
-                                        ),
-                                        child: Icon(
-                                          Icons.add,
-                                          size: 14,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 5),
-
-            // 2. GREEN "% OFF" DIRECTLY BELOW IMAGE IN PRODUCT DETAILS
-            if (discountPercent > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text(
-                  '$discountPercent% OFF',
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF16A34A),
-                    letterSpacing: 0.2,
-                  ),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(height: 6),
 
-            // 3. BOLD PRICE + STRUCK-THROUGH MRP
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '₹${price.toInt()}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14.5,
-                    color: isOutOfStock ? Colors.grey : const Color(0xFF09090B),
+              // 2. BOLD PRICE + STRUCK-THROUGH MRP + GREEN "% OFF" ON SAME ROW (Exact Image 1 layout)
+              Row(
+                children: [
+                  Text(
+                    '₹${price.toInt()}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color:
+                          isOutOfStock ? Colors.grey : const Color(0xFF09090B),
+                    ),
                   ),
-                ),
-                if (effectiveMarketPrice > price) ...[
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
+                  if (effectiveMarketPrice > price) ...[
+                    const SizedBox(width: 5),
+                    Text(
                       '₹${effectiveMarketPrice.toInt()}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 10.5,
+                        fontSize: 11,
                         color: Color(0xFF94A3B8),
                         decoration: TextDecoration.lineThrough,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$discountPercent% off',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF16A34A), // Exact green % off
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 2),
+
+              // 3. PRODUCT NAME (Exact typography from Image 1)
+              Text(
+                name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11.5,
+                  height: 1.25,
+                  color:
+                      isOutOfStock ? Colors.grey : const Color(0xFF1E293B),
+                ),
+              ),
+              const SizedBox(height: 3),
+
+              // 4. DELIVERY TIME ("⚡ 15 mins")
+              const Row(
+                children: [
+                  Icon(
+                    Icons.bolt_rounded,
+                    size: 12,
+                    color: Color(0xFF16A34A),
+                  ),
+                  SizedBox(width: 2),
+                  Text(
+                    '15 mins',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF64748B),
+                    ),
                   ),
                 ],
-              ],
-            ),
-            const SizedBox(height: 2),
-
-            // 4. CLEAN 2-LINE PRODUCT NAME
-            Text(
-              name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 11.5,
-                height: 1.2,
-                color: isOutOfStock ? Colors.grey : const Color(0xFF1E293B),
               ),
-            ),
-            const SizedBox(height: 3),
-
-            // 5. LIGHTNING DELIVERY TIME ("⚡ 15 mins")
-            const Row(
-              children: [
-                Icon(
-                  Icons.bolt_rounded,
-                  size: 12,
-                  color: Color(0xFF16A34A),
-                ),
-                SizedBox(width: 2),
-                Text(
-                  '15 mins',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

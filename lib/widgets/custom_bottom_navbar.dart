@@ -22,7 +22,7 @@ class CustomBottomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          height: 58,
+          height: 60,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
           decoration: BoxDecoration(
             color: const Color(0xFAFFFFFF),
@@ -38,6 +38,7 @@ class CustomBottomNavBar extends StatelessWidget {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _buildPillNavItem(
                 index: 0,
@@ -63,7 +64,8 @@ class CustomBottomNavBar extends StatelessWidget {
                 icon: Icons.shopping_basket_outlined,
                 activeIcon: Icons.shopping_basket_rounded,
               ),
-              _buildTodayOfferNavItem(
+              // Requirement 1: Today offer text removed! Only a big double-circle hero button fitting the bar
+              _buildBigDoubleCircleOfferButton(
                 index: 4,
                 isSelected: currentIndex == 4,
               ),
@@ -92,7 +94,7 @@ class CustomBottomNavBar extends StatelessWidget {
             color: isSelected ? const Color(0xFFEEEEEE) : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -123,67 +125,43 @@ class CustomBottomNavBar extends StatelessWidget {
     );
   }
 
-  Widget _buildTodayOfferNavItem({
+  /// Big size double-circle hero button fitting the bar height (without text below)
+  Widget _buildBigDoubleCircleOfferButton({
     required int index,
     required bool isSelected,
   }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onTap(index),
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFFFF1F2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Requirement 2: Big animated circle with combo colors showing "COMBO" then real product images scrolling UPWARD
-              _RotatingOfferCircleIcon(
-                isSelected: isSelected,
-                offerImages: offerImages,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Today Offer',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 9.5,
-                  fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                  color: isSelected
-                      ? const Color(0xFFE11D48)
-                      : const Color(0xFF27272A),
-                ),
-              ),
-            ],
-          ),
+    return GestureDetector(
+      onTap: () => onTap(index),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: _DoubleCircleOfferHero(
+          isSelected: isSelected,
+          offerImages: offerImages,
         ),
       ),
     );
   }
 }
 
-/// Attractive circular icon with larger size (30x30) with multi-color combo gradient
-/// where first "COMBO" text appears, and then real offer product images scroll UPWARD smoothly!
-class _RotatingOfferCircleIcon extends StatefulWidget {
+/// Double-circle layer button fitting the nav bar height:
+/// - Outer layer: Glowing multi-color combo gradient ring
+/// - Inner layer: Contrast circular pill
+/// - Inside: First "COMBO" text scrolls UPWARD, then real-time offer product images scroll UPWARD
+class _DoubleCircleOfferHero extends StatefulWidget {
   final bool isSelected;
   final List<String> offerImages;
 
-  const _RotatingOfferCircleIcon({
+  const _DoubleCircleOfferHero({
     required this.isSelected,
     this.offerImages = const [],
   });
 
   @override
-  State<_RotatingOfferCircleIcon> createState() =>
-      _RotatingOfferCircleIconState();
+  State<_DoubleCircleOfferHero> createState() => _DoubleCircleOfferHeroState();
 }
 
-class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
+class _DoubleCircleOfferHeroState extends State<_DoubleCircleOfferHero> {
   static final Map<String, MemoryImage> _sharedMemoryImageCache = {};
   Timer? _timer;
   int _currentIndex = 0;
@@ -191,7 +169,7 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 2100), (_) {
+    _timer = Timer.periodic(const Duration(milliseconds: 2000), (_) {
       if (mounted) {
         setState(() {
           final int totalItems = 1 + widget.offerImages.length;
@@ -212,7 +190,7 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
     if (trimmed.isEmpty) {
       return const Icon(
         Icons.local_offer_rounded,
-        size: 14,
+        size: 16,
         color: Colors.white,
       );
     }
@@ -229,7 +207,7 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
         } catch (_) {
           return const Icon(
             Icons.shopping_bag_rounded,
-            size: 14,
+            size: 16,
             color: Colors.white,
           );
         }
@@ -237,12 +215,12 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
       return Image(
         image: memImg,
         fit: BoxFit.cover,
-        width: 30,
-        height: 30,
+        width: 38,
+        height: 38,
         gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) => const Icon(
           Icons.shopping_bag_rounded,
-          size: 14,
+          size: 16,
           color: Colors.white,
         ),
       );
@@ -251,12 +229,12 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
     return Image.network(
       trimmed,
       fit: BoxFit.cover,
-      width: 30,
-      height: 30,
+      width: 38,
+      height: 38,
       gaplessPlayback: true,
       errorBuilder: (context, error, stackTrace) => const Icon(
         Icons.shopping_bag_rounded,
-        size: 14,
+        size: 16,
         color: Colors.white,
       ),
     );
@@ -264,83 +242,100 @@ class _RotatingOfferCircleIconState extends State<_RotatingOfferCircleIcon> {
 
   @override
   Widget build(BuildContext context) {
-    // Index 0 is always the bold "COMBO" text
-    // Index 1..N are real offer product images
     final bool isComboText = _currentIndex == 0 || widget.offerImages.isEmpty;
     final String currentImage = (!isComboText &&
             _currentIndex - 1 < widget.offerImages.length)
         ? widget.offerImages[_currentIndex - 1]
         : '';
 
+    // Outer circle layer: 46px diameter
     return Container(
-      width: 30,
-      height: 30,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: const LinearGradient(
           colors: [
             Color(0xFFFF5722), // Vibrant Coral
-            Color(0xFFE11D48), // Rose Red
+            Color(0xFFE11D48), // Deep Rose Red
             Color(0xFFF59E0B), // Festive Amber
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-        ),
-        border: Border.all(
-          color: Colors.white,
-          width: 1.4,
         ),
         boxShadow: [
           BoxShadow(
             color: widget.isSelected
                 ? const Color(0x66E11D48)
                 : const Color(0x33FF5722),
-            blurRadius: 5,
-            offset: const Offset(0, 1),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Center(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 380),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            final inTween = Tween<Offset>(
-              begin: const Offset(0.0, 1.0), // Scroll UPWARD
-              end: Offset.zero,
-            );
-            return ClipRect(
-              child: SlideTransition(
-                position: inTween.animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  ),
-                ),
-                child: FadeTransition(
-                  opacity: animation,
-                  child: child,
-                ),
-              ),
-            );
-          },
-          child: isComboText
-              ? const SizedBox(
-                  key: ValueKey('combo_text'),
-                  child: Text(
-                    'COMBO',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 7.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.3,
+      padding: const EdgeInsets.all(3.0), // Creates the double-circle layer ring
+      child: Container(
+        // Inner circle layer: 40px diameter with clean contrast border
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isComboText
+              ? const Color(0xFFBE123C)
+              : Colors.white,
+          border: Border.all(
+            color: Colors.white,
+            width: 1.5,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Center(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 380),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final inTween = Tween<Offset>(
+                begin: const Offset(0.0, 1.0), // Scroll UPWARD
+                end: Offset.zero,
+              );
+              return ClipRect(
+                child: SlideTransition(
+                  position: inTween.animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
                     ),
                   ),
-                )
-              : ClipOval(
-                  key: ValueKey('prod_img_$_currentIndex'),
-                  child: _buildProductThumbnail(currentImage),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
                 ),
+              );
+            },
+            child: isComboText
+                ? const SizedBox(
+                    key: ValueKey('combo_text'),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'COMBO',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : SizedBox(
+                    key: ValueKey('prod_img_$_currentIndex'),
+                    width: 38,
+                    height: 38,
+                    child: _buildProductThumbnail(currentImage),
+                  ),
+          ),
         ),
       ),
     );
