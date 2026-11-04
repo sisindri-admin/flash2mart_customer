@@ -1291,7 +1291,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (safeIndex == 0) const ActiveOrderFloatingBanner(),
+                // Pinned on all 4 main screens
+                if (safeIndex != 3) const ActiveOrderFloatingBanner(),
                 Selector<CartProvider, int>(
                   selector: (context, cart) => cart.totalQuantity,
                   builder: (context, totalQuantity, child) {

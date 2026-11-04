@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -59,20 +60,9 @@ class _ActiveOrderFloatingBannerState extends State<ActiveOrderFloatingBanner> {
 
         final int activeCount = activeDocs.length;
 
-        if (activeCount == 1) {
-          final doc = activeDocs.first;
-          final data = doc.data() as Map<String, dynamic>;
-          final model = OrderTrackingModel.fromFirestore(doc.id, data);
-
-          return _buildSingleOrderCard(
-            context,
-            docId: doc.id,
-            model: model,
-          );
-        }
-
         return Container(
-          margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          margin: const EdgeInsets.fromLTRB(12, 2, 12, 4),
+          height: 52,
           decoration: BoxDecoration(
             color: const Color(0xFF0F172A),
             borderRadius: BorderRadius.circular(16),
@@ -83,94 +73,61 @@ class _ActiveOrderFloatingBannerState extends State<ActiveOrderFloatingBanner> {
             boxShadow: const [
               BoxShadow(
                 color: Color(0x33000000),
-                blurRadius: 10,
-                offset: Offset(0, 3),
+                blurRadius: 8,
+                offset: Offset(0, 2),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF16A34A),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '$activeCount ACTIVE ORDERS',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Swipe to switch orders',
-                          style: TextStyle(
-                            color: Color(0xFF94A3B8),
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: List.generate(activeCount, (dotIdx) {
-                        final bool isCurrent = _activePageIndex == dotIdx;
-                        return Container(
-                          width: isCurrent ? 14 : 6,
-                          height: 5,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: isCurrent
-                                ? const Color(0xFF38BDF8)
-                                : const Color(0xFF475569),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        );
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: Color(0xFF334155), height: 1),
-              SizedBox(
-                height: 72,
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: activeCount,
-                  onPageChanged: (idx) {
-                    setState(() {
-                      _activePageIndex = idx;
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final doc = activeDocs[index];
-                    final data = doc.data() as Map<String, dynamic>;
-                    final model =
-                        OrderTrackingModel.fromFirestore(doc.id, data);
-
-                    return _buildOrderContentRow(
+              activeCount == 1
+                  ? _buildOrderRow(
                       context,
-                      docId: doc.id,
-                      model: model,
-                    );
-                  },
+                      doc: activeDocs.first,
+                      orderIndex: 1,
+                      totalOrders: 1,
+                    )
+                  : PageView.builder(
+                      controller: _pageController,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: activeCount,
+                      onPageChanged: (idx) {
+                        setState(() => _activePageIndex = idx);
+                      },
+                      itemBuilder: (context, index) {
+                        return _buildOrderRow(
+                          context,
+                          doc: activeDocs[index],
+                          orderIndex: index + 1,
+                          totalOrders: activeCount,
+                        );
+                      },
+                    ),
+
+              // Right side top edge: Slide indicator pills (.  -  .  .)
+              if (activeCount > 1)
+                Positioned(
+                  top: 5,
+                  right: 14,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(activeCount, (dotIdx) {
+                      final bool isCurrent = _activePageIndex == dotIdx;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.only(left: 3),
+                        width: isCurrent ? 14 : 4,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? const Color(0xFF38BDF8)
+                              : const Color(0xFF64748B),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      );
+                    }),
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -178,55 +135,38 @@ class _ActiveOrderFloatingBannerState extends State<ActiveOrderFloatingBanner> {
     );
   }
 
-  Widget _buildSingleOrderCard(
+  Widget _buildOrderRow(
     BuildContext context, {
-    required String docId,
-    required OrderTrackingModel model,
+    required QueryDocumentSnapshot doc,
+    required int orderIndex,
+    required int totalOrders,
   }) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFF334155),
-          width: 1,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: _buildOrderContentRow(context, docId: docId, model: model),
-    );
-  }
-
-  Widget _buildOrderContentRow(
-    BuildContext context, {
-    required String docId,
-    required OrderTrackingModel model,
-  }) {
+    final data = doc.data() as Map<String, dynamic>;
+    final model = OrderTrackingModel.fromFirestore(doc.id, data);
+    final String displayOrderId = (data['orderId'] ?? doc.id).toString();
     final bool isOnTheWay = model.currentStepIndex >= 3;
+
+    final String orderNoun = totalOrders == 1 ? 'order' : 'orders';
+    final String processingLabel = '$totalOrders $orderNoun processing';
 
     return InkWell(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => OrderTrackingScreen(orderId: docId),
+            builder: (_) => OrderTrackingScreen(orderId: doc.id),
           ),
         );
       },
       borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
                 color: isOnTheWay
                     ? const Color(0xFFEA580C)
@@ -238,24 +178,69 @@ class _ActiveOrderFloatingBannerState extends State<ActiveOrderFloatingBanner> {
                     ? Icons.two_wheeler_rounded
                     : Icons.inventory_2_rounded,
                 color: Colors.white,
-                size: 16,
+                size: 15,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          processingLabel,
+                          style: const TextStyle(
+                            color: Color(0xFF4ADE80),
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const _AnimatedProcessingChevrons(),
+                      ],
+                    ),
+                  ),
+
                   Row(
                     children: [
-                      Flexible(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: orderIndex == 1
+                              ? const Color(0xFF2563EB)
+                              : orderIndex == 2
+                                  ? const Color(0xFF7C3AED)
+                                  : const Color(0xFF0891B2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                         child: Text(
-                          'Order #${docId.length > 6 ? docId.substring(docId.length - 6) : docId} • ${model.displayStatus}',
+                          'Order $orderIndex#$displayOrderId',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12.5,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          model.displayStatus,
+                          style: const TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -263,98 +248,149 @@ class _ActiveOrderFloatingBannerState extends State<ActiveOrderFloatingBanner> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    model.statusSubtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 10.5,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            if (model.deliveryOtp.isNotEmpty)
+
+            if (model.deliveryOtp.isNotEmpty) ...[
+              const SizedBox(width: 6),
               GestureDetector(
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: model.deliveryOtp));
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Delivery OTP ${model.deliveryOtp} Copied!'),
+                      content: Text('OTP ${model.deliveryOtp} Copied!'),
                       duration: const Duration(seconds: 1),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
                 },
                 child: Container(
-                  margin: const EdgeInsets.only(right: 8),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: const Color(0xFFF59E0B),
-                      width: 1.1,
+                      width: 1,
                     ),
                   ),
-                  child: Column(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text(
-                        'OTP',
+                        'OTP: ',
                         style: TextStyle(
                           color: Color(0xFFB45309),
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
                         model.deliveryOtp,
                         style: const TextStyle(
                           color: Color(0xFF92400E),
-                          fontSize: 12.5,
+                          fontSize: 11,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                          letterSpacing: 0.8,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
+            ],
+
+            const SizedBox(width: 6),
+
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              height: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
               decoration: BoxDecoration(
                 color: const Color(0xFF2563EB),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Track',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11.5,
+              child: const Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Track',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
                     ),
-                  ),
-                  SizedBox(width: 3),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 10,
-                    color: Colors.white,
-                  ),
-                ],
+                    SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AnimatedProcessingChevrons extends StatefulWidget {
+  const _AnimatedProcessingChevrons();
+
+  @override
+  State<_AnimatedProcessingChevrons> createState() =>
+      _AnimatedProcessingChevronsState();
+}
+
+class _AnimatedProcessingChevronsState
+    extends State<_AnimatedProcessingChevrons> {
+  Timer? _timer;
+  int _activeArrowIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 280), (_) {
+      if (!mounted) return;
+      setState(() {
+        _activeArrowIndex = (_activeArrowIndex + 1) % 4;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(4, (index) {
+        final bool isLit = _activeArrowIndex == index;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          margin: const EdgeInsets.symmetric(horizontal: 0.5),
+          child: Text(
+            '>',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: isLit ? FontWeight.w900 : FontWeight.w600,
+              color: isLit
+                  ? const Color(0xFF22C55E)
+                  : const Color(0x664ADE80),
+            ),
+          ),
+        );
+      }),
     );
   }
 }
