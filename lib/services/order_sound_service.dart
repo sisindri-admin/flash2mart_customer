@@ -1,35 +1,45 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'order_sound_stub.dart'
     if (dart.library.js_interop) 'order_sound_web.dart';
 
 class OrderSoundService {
+  static final AudioPlayer _mobilePlayer = AudioPlayer();
+  static Uint8List? _cachedWavBytes;
   static String? _cachedChimeDataUri;
 
-  /// Plays a pleasant 4-note ascending order confirmation chime on both Web and Mobile
+  /// Plays a pleasant 4-note ascending order confirmation chime on both Mobile (Android/iOS) and Laptop (Web)
   static Future<void> playOrderPlacedSound() async {
     try {
-      // 1. Tactile + native system sound feedback
+      // 1. Tactile haptic feedback
       await HapticFeedback.heavyImpact();
-      await SystemSound.play(SystemSoundType.alert);
-      await SystemSound.play(SystemSoundType.click);
     } catch (_) {}
 
     try {
-      // 2. Synthesize & play polyphonic 4-note ascending chime WAV (C5 -> E5 -> G5 -> C6)
-      _cachedChimeDataUri ??= _buildSuccessChimeDataUri();
-      playWebAudioDataUri(_cachedChimeDataUri!);
-    } catch (_) {}
+      // 2. Synthesize & cache the polyphonic 4-note ascending chime WAV bytes (C5 -> E5 -> G5 -> C6)
+      _cachedWavBytes ??= _buildSuccessChimeWavBytes();
 
-    // 3. Secondary rhythmic tap for native devices where only SystemSound is active
-    Future.delayed(const Duration(milliseconds: 140), () async {
+      if (kIsWeb) {
+        // Web: Use direct Web Audio element / API
+        _cachedChimeDataUri ??=
+            'data:audio/wav;base64,${base64Encode(_cachedWavBytes!)}';
+        playWebAudioDataUri(_cachedChimeDataUri!);
+      } else {
+        // Mobile (Android / iOS): Use AudioPlayer with hardware media stream
+        await _mobilePlayer.setVolume(1.0);
+        await _mobilePlayer.play(BytesSource(_cachedWavBytes!));
+      }
+    } catch (_) {
+      // 3. Fallback: native system alert sound
       try {
-        await HapticFeedback.mediumImpact();
+        await SystemSound.play(SystemSoundType.alert);
         await SystemSound.play(SystemSoundType.click);
       } catch (_) {}
-    });
+    }
   }
 
   static void _writeUint16LE(Uint8List buf, int offset, int value) {
@@ -50,7 +60,7 @@ class OrderSoundService {
     buf[offset + 3] = (value >> 24) & 0xFF;
   }
 
-  static String _buildSuccessChimeDataUri() {
+  static Uint8List _buildSuccessChimeWavBytes() {
     const int sampleRate = 22050;
     const double totalDurationSec = 0.72;
     final int numSamples = (sampleRate * totalDurationSec).round();
@@ -116,7 +126,6 @@ class OrderSoundService {
       _writeInt16LE(wavBytes, 44 + (i * 2), clamped);
     }
 
-    final String base64Wav = base64Encode(wavBytes);
-    return 'data:audio/wav;base64,$base64Wav';
+    return wavBytes;
   }
 }

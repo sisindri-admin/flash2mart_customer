@@ -146,9 +146,10 @@ class MyOrderCardWidget extends StatelessWidget {
         ? '${timestamp.toDate().day.toString().padLeft(2, '0')}/${timestamp.toDate().month.toString().padLeft(2, '0')}/${timestamp.toDate().year} • ${timestamp.toDate().hour}:${timestamp.toDate().minute.toString().padLeft(2, '0')}'
         : 'Recently Placed';
 
+    // Requirement 4: Show Delivery OTP during order processing & all active stages
     final bool showOtpBadge = !model.isCancelled &&
         !model.isDelivered &&
-        (model.currentStepIndex >= 2 || model.deliveryPartnerId.isNotEmpty);
+        model.deliveryOtp.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),

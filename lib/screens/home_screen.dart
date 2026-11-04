@@ -657,7 +657,7 @@ class _HomeScreenState extends State<HomeScreen> {
               else ...[
                 // Main 3-Column Clean Grid
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   sliver: SliverGrid(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -671,9 +671,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
-                      childAspectRatio: 0.46,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 14,
+                      childAspectRatio: 0.49,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 6,
                     ),
                   ),
                 ),
@@ -719,9 +719,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 3,
-                                childAspectRatio: 0.46,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 14,
+                                childAspectRatio: 0.49,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 6,
                               ),
                               itemBuilder: (context, idx) {
                                 return _buildProductCardFromDoc(
@@ -831,9 +831,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 3,
-                                childAspectRatio: 0.46,
-                                crossAxisSpacing: 10,
-                                mainAxisSpacing: 14,
+                                childAspectRatio: 0.49,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 6,
                               ),
                               itemBuilder: (context, idx) {
                                 return _buildProductCardFromDoc(
@@ -1013,9 +1013,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
-                    childAspectRatio: 0.46,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 14,
+                    childAspectRatio: 0.49,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 6,
                   ),
                   itemBuilder: (context, idx) {
                     return _buildProductCardFromDoc(
@@ -1229,7 +1229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -1237,9 +1237,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
-                          childAspectRatio: 0.46,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 14,
+                          childAspectRatio: 0.49,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 6,
                         ),
                         itemBuilder: (context, idx) {
                           return _buildProductCardFromDoc(
