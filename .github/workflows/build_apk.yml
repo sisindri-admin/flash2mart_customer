@@ -14,7 +14,6 @@ on:
       - dev-branch-4
       - dev-branch-6
 
-
 permissions:
   contents: write
 
@@ -44,20 +43,38 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
+      # 🚀 1. APK మరియు తాజా లేటెస్ట్ సోర్స్ కోడ్‌ను జిప్ చేసే స్టెప్:
+      - name: Create Latest Source Code & APK Zip
+        run: |
+          cd build/app/outputs/flutter-apk/
+          zip -j flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip app-release.apk
+          cd ../../../../
+          zip -r flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip . -x "build/*" ".dart_tool/*" ".git/*" ".idea/*" "*.apk"
+
+      # 🚀 2. ఆర్టిఫాక్ట్స్‌గా అప్‌లోడ్ చేయడం:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flash2mart-customer-app
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: flash2mart-customer-app-v1.0.0-${{ github.run_number }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip
+            flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip
 
+      # 🚀 3. GitHub Releases లో APK మరియు లేటెస్ట్ జిప్ ఫైల్స్ పబ్లిష్ చేయడం:
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip
+            flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip
           tag_name: v1.0.0-${{ github.run_number }}
           name: Release v1.0.0-${{ github.run_number }}
           body: |
-            Automatic Release for Flash2Mart Customer App.
-            Contains stable app-release.apk.
+            🚀 Flash2Mart Customer App Release v1.0.0-${{ github.run_number }}
+            • APK File: `app-release.apk`
+            • APK Zip: `flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip`
+            • Latest Source Code Zip: `flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
