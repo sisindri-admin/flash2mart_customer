@@ -13,9 +13,11 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
     plugins.withId("com.android.library") {
-        afterEvaluate {
-            extensions.configure<com.android.build.api.dsl.LibraryExtension> {
-                compileSdk = 36
+        extensions.configure<com.android.build.api.variant.LibraryAndroidComponentsExtension> {
+            finalizeDsl { extension ->
+                if ((extension.compileSdk ?: 0) < 36) {
+                    extension.compileSdk = 36
+                }
             }
         }
     }
