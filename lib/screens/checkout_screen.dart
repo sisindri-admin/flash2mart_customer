@@ -250,14 +250,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     .toString();
               }
               final dynamic rawStoreLoc =
-                  mData['storeLocation'] ?? mData['location'];
+                  mData['storeLocation'] ?? mData['location'] ?? mData['merchantLocation'];
               if (rawStoreLoc is GeoPoint) {
                 storeGeoPoint = rawStoreLoc;
-              } else if (mData['latitude'] is num &&
-                  mData['longitude'] is num) {
+              } else if ((mData['storeLat'] ?? mData['latitude']) is num &&
+                  (mData['storeLng'] ?? mData['longitude']) is num) {
                 storeGeoPoint = GeoPoint(
-                  (mData['latitude'] as num).toDouble(),
-                  (mData['longitude'] as num).toDouble(),
+                  ((mData['storeLat'] ?? mData['latitude']) as num).toDouble(),
+                  ((mData['storeLng'] ?? mData['longitude']) as num).toDouble(),
                 );
               }
             }
@@ -312,6 +312,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         'merchantId': extractedMerchantId,
         'storeName': extractedStoreName,
         if (storeGeoPoint != null) 'storeLocation': storeGeoPoint,
+        if (storeGeoPoint != null) 'merchantLocation': storeGeoPoint,
+        if (storeGeoPoint != null) 'storeLat': storeGeoPoint.latitude,
+        if (storeGeoPoint != null) 'storeLng': storeGeoPoint.longitude,
         'customerLocation': customerGeoPoint,
         'customerLat': finalLat,
         'customerLng': finalLng,
