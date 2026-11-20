@@ -14,16 +14,17 @@ subprojects {
 }
 
 subprojects {
+    plugins.withId("com.android.library") {
+        extensions.configure<com.android.build.api.dsl.LibraryExtension>("android") {
+            compileSdk = 36
+        }
+    }
+}
+
+subprojects {
     project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
-}
-subprojects {
-    tasks.configureEach {
-        if (name.contains("AarMetadata") || name.contains("checkReleaseAarMetadata") || name.contains("checkDebugAarMetadata")) {
-            enabled = false
-        }
-    }
 }
