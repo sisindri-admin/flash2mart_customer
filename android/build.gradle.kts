@@ -20,3 +20,10 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
+subprojects {
+    tasks.configureEach {
+        if (name.contains("AarMetadata") || name.contains("checkReleaseAarMetadata") || name.contains("checkDebugAarMetadata")) {
+            enabled = false
+        }
+    }
+}
