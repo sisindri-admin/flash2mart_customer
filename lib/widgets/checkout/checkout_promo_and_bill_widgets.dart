@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class CouponOffer {
@@ -170,7 +171,33 @@ class CheckoutCouponSectionCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              ...CheckoutPromoAndBillWidgets.availableCoupons.map((coupon) {
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('coupons').where('isActive', isEqualTo: true).snapshots(),
+                builder: (context, snap) {
+                  final List<CouponOffer> liveList = [];
+                  if (snap.hasData) {
+                    for (final doc in snap.data!.docs) {
+                      final d = doc.data() as Map<String, dynamic>;
+                      final code = (d['code'] ?? doc.id).toString().toUpperCase();
+                      final type = (d['discountType'] ?? 'flat').toString();
+                      final val = (d['discountValue'] is num) ? (d['discountValue'] as num).toDouble() : 0.0;
+                      final minOrd = (d['minOrderAmount'] is num) ? (d['minOrderAmount'] as num).toDouble() : 0.0;
+                      final maxOff = (d['maxDiscount'] is num) ? (d['maxDiscount'] as num).toDouble() : 0.0;
+                      liveList.add(CouponOffer(
+                        code: code,
+                        title: (d['title'] ?? 'Special Offer').toString(),
+                        description: (d['description'] ?? 'Valid on orders above ₹${minOrd.toStringAsFixed(0)}').toString(),
+                        minOrderAmount: minOrd,
+                        flatDiscount: type == 'percent' ? 0.0 : val,
+                        percentDiscount: type == 'percent' ? val.toInt() : 0,
+                        maxDiscount: maxOff,
+                      ));
+                    }
+                  }
+                  final couponsToShow = liveList.isNotEmpty ? liveList : CheckoutPromoAndBillWidgets.availableCoupons;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: couponsToShow.map((coupon) {
                 final bool isEligible = itemTotal >= coupon.minOrderAmount;
                 final double savings = coupon.calculateDiscount(itemTotal);
 
@@ -254,7 +281,10 @@ class CheckoutCouponSectionCard extends StatelessWidget {
                     ],
                   ),
                 );
-              }),
+              }).toList(),
+                  );
+                },
+              ),
             ],
           ),
         );

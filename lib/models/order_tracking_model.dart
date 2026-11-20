@@ -76,6 +76,9 @@ class OrderTrackingModel {
   final String deliveryAddress;
   final String deliveryInstructions;
   final String deliveryOtp;
+  final String riderIssue;
+  final bool arrivedDifferentLocation;
+  final int arrivalDistanceMeters;
 
   // Delivery Partner Info
   final String deliveryPartnerId;
@@ -126,6 +129,9 @@ class OrderTrackingModel {
     required this.deliveryAddress,
     required this.deliveryInstructions,
     required this.deliveryOtp,
+    this.riderIssue = '',
+    this.arrivedDifferentLocation = false,
+    this.arrivalDistanceMeters = 0,
     required this.deliveryPartnerId,
     required this.fallbackPartnerName,
     required this.fallbackPartnerPhone,
@@ -597,7 +603,7 @@ class OrderTrackingModel {
 
     final double heading =
         (data['heading'] is num) ? (data['heading'] as num).toDouble() : 0.0;
-    final DateTime? lastUpdate = _parseTimestamp(data['lastLocationUpdate']);
+    final DateTime? lastUpdate = _parseTimestamp(data['lastLocationUpdate'] ?? data['updatedAt']);
 
     // 4. GENERATE CONTINUOUS REALISTIC ROAD-LIKE BLUE ROUTE SEGMENTS
     // Segment 1: Delivery Partner -> Mart / Store
@@ -705,6 +711,9 @@ class OrderTrackingModel {
       deliveryInstructions:
           (data['deliveryInstructions'] ?? '').toString().trim(),
       deliveryOtp: _resolveDeliveryOtp(orderId, data),
+      riderIssue: (data['riderIssue'] ?? '').toString().trim(),
+      arrivedDifferentLocation: data['arrivedDifferentLocation'] == true,
+      arrivalDistanceMeters: (data['arrivalDistanceMeters'] is num) ? (data['arrivalDistanceMeters'] as num).toInt() : 0,
       deliveryPartnerId: partnerId,
       fallbackPartnerName: partnerName,
       fallbackPartnerPhone: partnerPhone,

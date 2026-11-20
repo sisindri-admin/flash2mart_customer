@@ -3,18 +3,8 @@ name: Build Flash2Mart Customer APK
 on:
   push:
     branches:
-      - main
-      - master
-      - dev-customer-app
-      - dev-customer-app-2
-      - dev-branch
-      - dev-branch-1
-      - dev-branch-2
-      - dev-branch-3
-      - dev-branch-4
-      - dev-branch-6
-      - dev-branch-7
-      - dev-branch-7
+      - '**'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -42,41 +32,27 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build APK
+      - name: Build Release APK
         run: flutter build apk --release
 
-      # 🚀 1. APK మరియు తాజా లేటెస్ట్ సోర్స్ కోడ్‌ను జిప్ చేసే స్టెప్:
-      - name: Create Latest Source Code & APK Zip
-        run: |
-          cd build/app/outputs/flutter-apk/
-          zip -j flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip app-release.apk
-          cd ../../../../
-          zip -r flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip . -x "build/*" ".dart_tool/*" ".git/*" ".idea/*" "*.apk"
+      - name: Rename APK for Mobile Download
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/flash2mart-customer-release.apk
 
-      # 🚀 2. ఆర్టిఫాక్ట్స్‌గా అప్‌లోడ్ చేయడం:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flash2mart-customer-app-v1.0.0-${{ github.run_number }}
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip
-            flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip
+          name: flash2mart-customer-release-v1.0.${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/flash2mart-customer-release.apk
 
-      # 🚀 3. GitHub Releases లో APK మరియు లేటెస్ట్ జిప్ ఫైల్స్ పబ్లిష్ చేయడం:
       - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip
-            flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip
-          tag_name: v1.0.0-${{ github.run_number }}
-          name: Release v1.0.0-${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/flash2mart-customer-release.apk
+          tag_name: release-${{ github.ref_name }}-${{ github.run_number }}
+          name: Flash2Mart Customer (${{ github.ref_name }} #${{ github.run_number }})
           body: |
-            🚀 Flash2Mart Customer App Release v1.0.0-${{ github.run_number }}
-            • APK File: `app-release.apk`
-            • APK Zip: `flash2mart-customer-apk-v1.0.0-${{ github.run_number }}.zip`
-            • Latest Source Code Zip: `flash2mart-customer-latest-code-v1.0.0-${{ github.run_number }}.zip`
+            🚀 Automatic Release for Flash2Mart Customer
+            • Branch: `${{ github.ref_name }}`
+            • APK: `flash2mart-customer-release.apk`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

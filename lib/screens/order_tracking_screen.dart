@@ -26,7 +26,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   bool _isCancelling = false;
   Map<String, dynamic>? _merchantDocData;
   Map<String, dynamic>? _customerDocData;
+  Map<String, dynamic>? _partnerDocData;
   String? _lastLoadedMerchantId;
+  String? _lastLoadedPartnerId;
   String? _lastLoadedUserId;
 
   void _navigateToMyOrders(BuildContext context) {
@@ -311,9 +313,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 (data['merchantId'] ?? '').toString().trim();
             final String userId = (data['userId'] ?? '').toString().trim();
 
+            final String partnerId = (data['deliveryPartnerId'] ?? data['driverId'] ?? '').toString().trim();
             if (data['storeLocation'] == null ||
                 data['customerLocation'] == null) {
               _fetchMerchantAndCustomerDetails(merchantId, userId);
+            }
+            if (partnerId.isNotEmpty && partnerId != _lastLoadedPartnerId) {
+              _lastLoadedPartnerId = partnerId;
+              FirebaseFirestore.instance.collection('delivery_partners').doc(partnerId).get().then((pDoc) {
+                if (pDoc.exists && mounted) {
+                  setState(() => _partnerDocData = pDoc.data());
+                }
+              }).catchError((_) {});
             }
 
             final model = OrderTrackingModel.fromFirestore(
@@ -321,6 +332,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               data,
               merchantDocData: _merchantDocData,
               customerDocData: _customerDocData,
+              partnerDocData: _partnerDocData,
             );
 
             return SingleChildScrollView(

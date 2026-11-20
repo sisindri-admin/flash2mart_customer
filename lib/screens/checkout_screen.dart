@@ -32,6 +32,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _selectedPaymentMethod = 'COD';
   bool _isPlacingOrder = false;
   CouponOffer? _appliedCoupon;
+  double _cfgDeliveryFee = 25.0;
+  double _cfgFreeThreshold = 199.0;
+  double _cfgHandlingFee = 5.0;
+  double _cfgSurgeFee = 0.0;
 
   double? _resolvedLat;
   double? _resolvedLng;
@@ -46,6 +50,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _resolvedLat = widget.customerLat;
     _resolvedLng = widget.customerLng;
     _ensureLiveCustomerCoordinates();
+    _loadLivePricingConfig();
+  }
+
+  Future<void> _loadLivePricingConfig() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('app_settings').doc('pricing').get();
+      if (!doc.exists || !mounted) return;
+      final d = doc.data() ?? {};
+      final bool surgeOn = d['isSurgeActive'] == true;
+      setState(() {
+        _cfgDeliveryFee = (d['deliveryFee'] is num) ? (d['deliveryFee'] as num).toDouble() : 25.0;
+        _cfgFreeThreshold = (d['freeDeliveryThreshold'] is num) ? (d['freeDeliveryThreshold'] as num).toDouble() : 199.0;
+        _cfgHandlingFee = (d['handlingFee'] is num) ? (d['handlingFee'] as num).toDouble() : 5.0;
+        _cfgSurgeFee = surgeOn && (d['surgeFee'] is num) ? (d['surgeFee'] as num).toDouble() : 0.0;
+      });
+    } catch (_) {}
   }
 
   Future<void> _ensureLiveCustomerCoordinates() async {
@@ -180,8 +200,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final double discountAmount = _appliedCoupon != null
           ? _appliedCoupon!.calculateDiscount(itemTotal)
           : 0.0;
-      final double deliveryFee = itemTotal >= 199 ? 0.0 : 25.0;
-      final double handlingFee = 5.0;
+      final double deliveryFee = (itemTotal >= _cfgFreeThreshold ? 0.0 : _cfgDeliveryFee) + _cfgSurgeFee;
+      final double handlingFee = _cfgHandlingFee;
       final double grandTotal =
           (itemTotal - discountAmount + deliveryFee + handlingFee)
               .clamp(0.0, double.infinity);
@@ -519,14 +539,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ? _appliedCoupon!.calculateDiscount(itemTotal)
                 : 0.0;
             final double deliveryFee =
-                itemTotal >= 199 || itemTotal == 0 ? 0.0 : 25.0;
-            final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
+                itemTotal == 0 ? 0.0 : ((itemTotal >= _cfgFreeThreshold ? 0.0 : _cfgDeliveryFee) + _cfgSurgeFee);
+            final double handlingFee = itemTotal > 0 ? _cfgHandlingFee : 0.0;
             final double grandTotal =
                 (itemTotal - discountAmount + deliveryFee + handlingFee)
                     .clamp(0.0, double.infinity);
 
             final double totalSavings = discountAmount +
-                (deliveryFee == 0 && itemTotal > 0 ? 25.0 : 0.0);
+                (deliveryFee == 0 && itemTotal > 0 ? _cfgDeliveryFee : 0.0);
 
             return SingleChildScrollView(
               controller: _scrollController,
@@ -956,8 +976,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ? _appliedCoupon!.calculateDiscount(itemTotal)
                 : 0.0;
             final double deliveryFee =
-                itemTotal >= 199 || itemTotal == 0 ? 0.0 : 25.0;
-            final double handlingFee = itemTotal > 0 ? 5.0 : 0.0;
+                itemTotal == 0 ? 0.0 : ((itemTotal >= _cfgFreeThreshold ? 0.0 : _cfgDeliveryFee) + _cfgSurgeFee);
+            final double handlingFee = itemTotal > 0 ? _cfgHandlingFee : 0.0;
             final double grandTotal =
                 (itemTotal - discountAmount + deliveryFee + handlingFee)
                     .clamp(0.0, double.infinity);
